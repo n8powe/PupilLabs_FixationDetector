@@ -125,11 +125,47 @@ class Fixation_Detector():
                 raw['frame'] = np.array(list(data.world_index[index]))
 
                 return raw
+            
+            def find_eye_velocities_in_pixel_space(self, eye_id, method):
+                '''This function finds the velocity of the eye in eye video space, normalized between 0-1'''
+                index   = (self.pupil_positions_data.eye_id == eye_id) * (self.pupil_positions_data.method == method)
+                x_pos_norm = Local.Mean(self.pupil_positions_data.norm_pos_x[index], width=8)*400
+                y_pos_norm = 1-(Local.Mean(self.pupil_positions_data.norm_pos_y[index], width=8)*400) # We recorded at 400x400 pixels. Subtracting from 1 gives the correct Y position. 
+
+                dt     = Diff(self.pupil_positions_data.pupil_timestamp[index])
+
+                dx = (Diff(x_pos_norm)/dt)**2
+                dy = (Diff(y_pos_norm)/dt)**2
+
+                velocity_magnitude = np.sqrt(dx + dy)
+                acceleration = np.gradient(Diff(velocity_magnitude), axis=0)/dt
+
+                condition = velocity_magnitude<400 # Filter out large values
+
+                self.pupil_velocity_eye_vid = velocity_magnitude[condition]
+
+                self.pupil_acceleration_eye_vid = np.abs(acceleration[condition])
+
+                print (velocity_magnitude)
+
+                fig, ax = plt.subplots(3)
+                ax[0].plot(x_pos_norm, 'r')
+                ax[0].plot(y_pos_norm, 'b')
+                ax[1].plot(self.pupil_velocity_eye_vid, 'r')
+                ax[2].plot(self.pupil_acceleration_eye_vid, 'b')
+
+                plt.show()
+                
+                
+
+                return 0
 
             if pupil_file_path=="pupil_positions.csv":
                 data = Load(self.pupil_positions_data_path, eye_id=0, method=method)
             else:
                 data = Load(pupil_file_path, eye_id=0, method=method)
+
+            find_eye_velocities_in_pixel_space(self, eye_id, method)
 
             fix = {}
             
@@ -483,6 +519,6 @@ detector.read_gaze_data(export_number="002")
 maxVelocity = 60  # Just change this and the next value to adjust how fixations are detected. They are angular velocity and acceleration of the eye. 
 maxAcceleration = 20 # Not used
 
-detector.find_fixation_updated(eye_id=0,maxVel=maxVelocity, minVel=15, maxAcc=maxAcceleration, method="pye3d 0.3.0 real-time")
+detector.find_fixation_updated(eye_id=0,maxVel=maxVelocity, minVel=15, maxAcc=maxAcceleration, method="2d c++")
 
 detector.create_fixation_tracking_video(track_fixations=False, tracking_window=10)
