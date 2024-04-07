@@ -117,7 +117,7 @@ class Fixation_Detector():
                 print (index)
                 raw = {}
                 raw['time']   = np.array(list(data.pupil_timestamp[index])) #- np.array(data.pupil_timestamp[index][0])
-                filt_sz = 3
+                filt_sz = 2
                 # Uncomment the next line if you want to smooth the vector components
                 #raw['vec']    = np.column_stack([Local.Mean(data.circle_3d_normal_x[index], width=filt_sz), Local.Mean(data.circle_3d_normal_y[index], width=filt_sz), Local.Mean(data.circle_3d_normal_z[index], width=filt_sz)])
                 raw['vec']    = np.column_stack([data.circle_3d_normal_x[index], data.circle_3d_normal_y[index], data.circle_3d_normal_z[index]])
@@ -129,36 +129,49 @@ class Fixation_Detector():
             def find_eye_velocities_in_pixel_space(self, eye_id, method):
                 '''This function finds the velocity of the eye in eye video space, normalized between 0-1'''
                 index   = (self.pupil_positions_data.eye_id == eye_id) * (self.pupil_positions_data.method == method)
-                x_pos_norm = Local.Mean(self.pupil_positions_data.norm_pos_x[index], width=8)*400
-                y_pos_norm = 1-(Local.Mean(self.pupil_positions_data.norm_pos_y[index], width=8)*400) # We recorded at 400x400 pixels. Subtracting from 1 gives the correct Y position. 
+                x_pos_norm = Local.Mean(self.pupil_positions_data.norm_pos_x[index], width=5)#*400/2
+                y_pos_norm = 1-Local.Mean(self.pupil_positions_data.norm_pos_y[index], width=5)#*400/2) # We recorded at 400x400 pixels. Subtracting from 1 gives the correct Y position. 
 
                 dt     = Diff(self.pupil_positions_data.pupil_timestamp[index])
+                t = self.pupil_positions_data.pupil_timestamp[index] - self.pupil_positions_data.pupil_timestamp[0]
 
-                dx = (Diff(x_pos_norm)/dt)**2
-                dy = (Diff(y_pos_norm)/dt)**2
+                dx = (((Diff(x_pos_norm)/39/dt)))**2
+                dy = (((Diff(y_pos_norm)/39/dt)))**2
 
-                velocity_magnitude = np.sqrt(dx + dy)
-                acceleration = np.gradient(Diff(velocity_magnitude), axis=0)/dt
+                velocity_magnitude = Local.Mean(np.sqrt(dx + dy), width=2)
+                acceleration = Diff(velocity_magnitude)/dt
 
-                condition = velocity_magnitude<400 # Filter out large values
+                condition = velocity_magnitude<1000 # Filter out large values
 
                 self.pupil_velocity_eye_vid = velocity_magnitude[condition]
 
                 self.pupil_acceleration_eye_vid = np.abs(acceleration[condition])
 
-                print (velocity_magnitude)
+                self.dt_pupil_data = t[condition]#dt[condition]
+
+                self.pupil_frames = self.pupil_positions_data.world_index[index]
+                self.pupil_frames = self.pupil_frames[condition]
+
+                self.pupil_x_pos_norm = x_pos_norm[condition]
+                self.pupil_y_pos_norm = y_pos_norm[condition]
+
+                #print (velocity_magnitude)
+
+                t_forplotting = t[condition]
 
                 fig, ax = plt.subplots(3)
-                ax[0].plot(x_pos_norm, 'r')
-                ax[0].plot(y_pos_norm, 'b')
-                ax[1].plot(self.pupil_velocity_eye_vid, 'r')
-                ax[2].plot(self.pupil_acceleration_eye_vid, 'b')
+                ax[0].plot(t_forplotting, x_pos_norm[condition], 'r')
+                ax[0].plot(t_forplotting, y_pos_norm[condition], 'b')
+                ax[1].plot(t_forplotting, self.pupil_velocity_eye_vid, 'r')
+                ax[2].plot(t_forplotting, self.pupil_acceleration_eye_vid, 'b')
+                ax[2].set_ylim(0,2000)
 
-                plt.show()
+                #plt.show()
+                plt.close()
                 
                 
 
-                return 0
+                return self
 
             if pupil_file_path=="pupil_positions.csv":
                 data = Load(self.pupil_positions_data_path, eye_id=0, method=method)
@@ -176,7 +189,7 @@ class Fixation_Detector():
             fix['vel']    = ang / dt
             condition = fix['vel']<500
             velocity = fix['vel'][condition]          ######## Change filter size or function if desired. I set it to 10, but that is kind of long. 
-            velocity = Local.Mean(velocity, width=3)  # small filter?
+            velocity = Local.Mean(velocity, width=2)  # small filter?
             
             acceleration    = np.gradient(velocity, axis=0) / dt[condition]
             
@@ -202,7 +215,7 @@ class Fixation_Detector():
 
             good = np.abs(np.asarray(good)-1)
 
-            #vel = velocity < maxVel
+            vel = velocity < maxVel
 
             #good = vel*acc*1
 
@@ -329,7 +342,7 @@ class Fixation_Detector():
             fig, ax = plt.subplots(3)
 
             ax[2].plot(time, self.gaze_velocity, 'r')
-            #plt.plot(time, self.gaze_acceleration, 'b')
+            #ax[2].plot(time, self.gaze_acceleration, 'b')
             ax[2].plot(time, self.fixation_bool, 'g')
             
             if not math.isnan(timestamp):
@@ -340,15 +353,16 @@ class Fixation_Detector():
                 print ("NaN time")
             ax[2].set_ylim(0,200)
 
-            ax[0].plot(self.fixation_frame_world, self.world_frame_fixation_bool)
+            ax[0].plot(self.pupil_frames, self.pupil_x_pos_norm)
+            ax[0].plot(self.pupil_frames, self.pupil_y_pos_norm)
             ax[0].vlines(frame_number, 0, 1000, color='gray', alpha=0.5, linewidth=20)
             ax[0].vlines(frame_number, 0, 1000, color='k', linewidth=2)
             ax[0].set_xlim(frame_number-timesync, frame_number+timesync)
-            ax[0].set_ylim(0,2)
+            ax[0].set_ylim(0.3,0.65)
 
 
-            #ax[1].plot(self.pupil_positions_data_world_Frame["circle_3d_normal_x"]-np.mean(self.pupil_positions_data_world_Frame["circle_3d_normal_x"]), "r")
-            #ax[1].plot(self.pupil_positions_data_world_Frame["circle_3d_normal_y"]-np.mean(self.pupil_positions_data_world_Frame["circle_3d_normal_y"]), "g")
+            ax[1].plot(self.pupil_positions_data_world_Frame["circle_3d_normal_x"]-np.mean(self.pupil_positions_data_world_Frame["circle_3d_normal_x"]), "r")
+            ax[1].plot(self.pupil_positions_data_world_Frame["circle_3d_normal_y"]-np.mean(self.pupil_positions_data_world_Frame["circle_3d_normal_y"]), "g")
             ax[1].plot(self.pupil_positions_data_world_Frame["circle_3d_normal_z"]-np.mean(self.pupil_positions_data_world_Frame["circle_3d_normal_z"]), "b")
             ax[1].vlines(frame_number, -1000, 1000, color='gray', alpha=0.5, linewidth=20)
             ax[1].vlines(frame_number, -1000, 1000, color='k', linewidth=2)
@@ -514,11 +528,11 @@ gaze_folder = "000" # Within subject folder should be a gaze data folder --- som
 
 detector = Fixation_Detector(subject_folder_path=subject_folder, gaze_folder_name=gaze_folder)
 
-detector.read_gaze_data(export_number="002")
+detector.read_gaze_data(export_number="004")
 
-maxVelocity = 60  # Just change this and the next value to adjust how fixations are detected. They are angular velocity and acceleration of the eye. 
+maxVelocity = 65  # Just change this and the next value to adjust how fixations are detected. They are angular velocity and acceleration of the eye. 
 maxAcceleration = 20 # Not used
 
-detector.find_fixation_updated(eye_id=0,maxVel=maxVelocity, minVel=15, maxAcc=maxAcceleration, method="2d c++")
+detector.find_fixation_updated(eye_id=0,maxVel=maxVelocity, minVel=10, maxAcc=maxAcceleration, method="pye3d 0.0.4 post-hoc")
 
 detector.create_fixation_tracking_video(track_fixations=False, tracking_window=10)
