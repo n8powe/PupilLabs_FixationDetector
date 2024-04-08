@@ -352,6 +352,7 @@ class Fixation_Detector():
             else:
                 print ("NaN time")
             ax[2].set_ylim(0,200)
+            ax[2].set_ylabel("Pupil Velocity")
 
             ax[0].plot(self.pupil_frames, self.pupil_x_pos_norm)
             ax[0].plot(self.pupil_frames, self.pupil_y_pos_norm)
@@ -359,6 +360,7 @@ class Fixation_Detector():
             ax[0].vlines(frame_number, 0, 1000, color='k', linewidth=2)
             ax[0].set_xlim(frame_number-timesync, frame_number+timesync)
             ax[0].set_ylim(0.3,0.65)
+            ax[0].set_ylabel("Pupil Position Eye Cam.")
 
 
             ax[1].plot(self.pupil_positions_data_world_Frame["circle_3d_normal_x"]-np.mean(self.pupil_positions_data_world_Frame["circle_3d_normal_x"]), "r")
@@ -368,6 +370,7 @@ class Fixation_Detector():
             ax[1].vlines(frame_number, -1000, 1000, color='k', linewidth=2)
             ax[1].set_xlim(frame_number-timesync, frame_number+timesync)
             ax[1].set_ylim(-0.08,0.08)
+            ax[1].set_ylabel("Eye Vector Position")
 
             #plt.legend(["Velocity", "Acceleration", "Fixation (Yes/No)"])
             #plt.xlim([624000,624010])
