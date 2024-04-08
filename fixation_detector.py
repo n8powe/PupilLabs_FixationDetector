@@ -129,8 +129,8 @@ class Fixation_Detector():
             def find_eye_velocities_in_pixel_space(self, eye_id, method):
                 '''This function finds the velocity of the eye in eye video space, normalized between 0-1'''
                 index   = (self.pupil_positions_data.eye_id == eye_id) * (self.pupil_positions_data.method == method)
-                x_pos_norm = Local.Mean(self.pupil_positions_data.norm_pos_x[index], width=5)#*400/2
-                y_pos_norm = 1-Local.Mean(self.pupil_positions_data.norm_pos_y[index], width=5)#*400/2) # We recorded at 400x400 pixels. Subtracting from 1 gives the correct Y position. 
+                x_pos_norm = Local.Mean(self.pupil_positions_data.norm_pos_x[index], width=2)#*400/2
+                y_pos_norm = 1-Local.Mean(self.pupil_positions_data.norm_pos_y[index], width=2)#*400/2) # We recorded at 400x400 pixels. Subtracting from 1 gives the correct Y position. 
 
                 dt     = Diff(self.pupil_positions_data.pupil_timestamp[index])
                 t = self.pupil_positions_data.pupil_timestamp[index] - self.pupil_positions_data.pupil_timestamp[0]
@@ -502,8 +502,8 @@ class Fixation_Detector():
             if frame_number>fixations["EndFrame"][fixation_index]:
                 fixation_index = fixation_index + 1
 
-                if fixation_index > number_of_fixations:
-                    break
+            if frame_number == total_frames:
+                break
         
             # Press 'q' to exit
             if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -521,18 +521,18 @@ class Fixation_Detector():
 
 
 subject_folder = "Subject7" # Add subject folder name here
-gaze_folder = "000" # Within subject folder should be a gaze data folder --- something like 000 or 001
+gaze_folder = "001" # Within subject folder should be a gaze data folder --- something like 000 or 001
                 # It will then search that for an export folder, and take export 000 from it and read in all the data
                 # Find fixations will find all of the fixations and save the data to the subject folder.
                 # Create fixation tracking video will create a video that shows fixations and plots the graph of the gaze velocities/accelerations next to it. 
 
 detector = Fixation_Detector(subject_folder_path=subject_folder, gaze_folder_name=gaze_folder)
 
-detector.read_gaze_data(export_number="004")
+detector.read_gaze_data(export_number="000")
 
 maxVelocity = 65  # Just change this and the next value to adjust how fixations are detected. They are angular velocity and acceleration of the eye. 
 maxAcceleration = 20 # Not used
 
-detector.find_fixation_updated(eye_id=0,maxVel=maxVelocity, minVel=10, maxAcc=maxAcceleration, method="pye3d 0.0.4 post-hoc")
+detector.find_fixation_updated(eye_id=0,maxVel=maxVelocity, minVel=10, maxAcc=maxAcceleration, method="3d c++")
 
 detector.create_fixation_tracking_video(track_fixations=False, tracking_window=10)
