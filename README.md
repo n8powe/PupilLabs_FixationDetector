@@ -10,3 +10,7 @@ Find fixations will find all of the fixations and save the data to the subject f
 Create fixation tracking video will create a video that shows fixations and plots the graph of the gaze velocities and in head eye orientation next to it. 
 
 **Use Pupil Player version 2.6 to export your data**
+
+added an optic flow estimation algorithm. 
+
+This flow algorithm function also does gaze centering, and will output a retina centered video if specified as well as the optic flow for that video (if also specified).
