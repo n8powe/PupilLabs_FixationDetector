@@ -528,7 +528,7 @@ class Fixation_Detector():
         print ("Done fixation tracking in video.")
         return self
 
-    def estimate_optic_flow(self, gaze_centered=False, start_frame=0, visualize_as="color", use_tracked_fixations=False, output_flow=False, output_centered_video=False):
+    def estimate_optic_flow(self, gaze_centered=False,only_show_fixations=True, start_frame=0, visualize_as="color", use_tracked_fixations=False, output_flow=False, output_centered_video=False):
         self.use_tracked_fixations = use_tracked_fixations
 
         def smooth_pixel_gaze(self, filter_size=5):
@@ -838,9 +838,19 @@ class Fixation_Detector():
                 break
             
             if gaze_centered:
-                frame = create_gaze_centered_frame(self, frame, frame_number, padding_size)
+                booleanIndexWorldFrames = np.where(self.fixation_frame_world == frame_number)[0]
+                if only_show_fixations:
+                    if self.world_frame_fixation_bool[booleanIndexWorldFrames] == 1:
+                        
+                        frame = create_gaze_centered_frame(self, frame, frame_number, padding_size)
+                    else:
+                        frame = np.zeros([frame.shape[0]*padding_size, frame.shape[1]*padding_size, 3], dtype=np.uint8)
+                else:
+                    frame = create_gaze_centered_frame(self, frame, frame_number, padding_size)
                 
             if output_centered_video and gaze_centered:
+                cv2.putText(frame, str(np.round(frame_number)), (5, 30), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (0, 0, 255), 1)
+                cv2.imshow("Centered Video", frame)
                 out_centered.write(frame)
             #print (prev_gray.shape, gray.shape)
                 
@@ -884,6 +894,7 @@ class Fixation_Detector():
 
                 # Display the frame with optical flow
                 #cv2.imshow('Optical Flow', flow_vis)
+                cv2.putText(frame, str(np.round(frame_number)), (5, 30), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (0, 0, 255), 1)
 
                 # Update the previous frame and previous gray frame
                 
@@ -933,6 +944,6 @@ detector.find_fixation_updated(eye_id=0,maxVel=maxVelocity, minVel=10, maxAcc=ma
 #detector.create_fixation_tracking_video(track_fixations=False, tracking_window=30)
 
 # This is an optic flow estimation function, BUT it can also be used to output the retina centered video. It currently does the entire video, not breaking it up into fixations. Though this can be done easily. 
-detector.estimate_optic_flow(gaze_centered=True, use_tracked_fixations=False, output_flow=False, output_centered_video=True)
+detector.estimate_optic_flow(gaze_centered=True, only_show_fixations=True, use_tracked_fixations=False, output_flow=False, output_centered_video=True)
 
 
