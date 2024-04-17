@@ -845,6 +845,10 @@ class Fixation_Detector():
             
             if gaze_centered:
                 booleanIndexWorldFrames = np.where(self.fixation_frame_world == frame_number)[0]
+
+                if self.world_frame_fixation_bool[booleanIndexWorldFrames] == 1 and self.world_frame_fixation_bool[booleanIndexWorldFrames-1] == 0:
+                    prev = np.zeros([prev.shape[0]*padding_size, prev.shape[1]*padding_size, 3])
+
                 if only_show_fixations:
                     if self.world_frame_fixation_bool[booleanIndexWorldFrames] == 1:
                         

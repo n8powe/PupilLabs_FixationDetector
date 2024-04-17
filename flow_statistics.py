@@ -65,8 +65,12 @@ class Flow_Statistics():
         flow_stats["avg_velocity"] = empty_velocity_mat/num_flow_frames
 
         ## Average the velocity direction
-
+        ## I think this part is incorrect? Might need to figure out a better way of determining the distribution of speed directions.
         flow_stats["avg_direction"] = empty_angle_mat/num_flow_frames
+
+
+        with open('flow_stats.pickle', 'wb') as handle: 
+            pkl.dump(flow_stats, handle, protocol=pkl.HIGHEST_PROTOCOL)
 
 
         return flow_stats
