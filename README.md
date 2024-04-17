@@ -14,3 +14,8 @@ Create fixation tracking video will create a video that shows fixations and plot
 added an optic flow estimation algorithm. 
 
 This flow algorithm function also does gaze centering, and will output a retina centered video if specified as well as the optic flow for that video (if also specified).
+
+
+
+
+I added another script. It isn't finished, but it will calculate the motion statistics of the output estimated optic flow from the fixation finder script. It will also combine with the IMU data. 

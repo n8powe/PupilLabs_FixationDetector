@@ -13,6 +13,7 @@ import matplotlib
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 import PIL.Image
 import PIL
+import pickle as pkl
 #matplotlib.use("Agg") # This should make it so this will work on mac. If it messes something up on PC, comment it out. 
 
 
@@ -814,6 +815,10 @@ class Fixation_Detector():
         
         if output_flow:
             #prev_gray = cv2.cuda.cvtColor(np.float32(prev), cv2.COLOR_BGR2GRAY)
+            self.flow_out_folder = self.subject_folder_path+"/Flow/"
+            if not os.path.isdir(self.subject_folder_path+"/Flow/"):
+                os.mkdir(self.subject_folder_path+"/Flow/")
+
             
             if not gaze_centered:
                 out = cv2.VideoWriter(self.subject_folder_path+'/OpticFlow.mp4', cv2.VideoWriter_fourcc(*'mp4v'), 30, (prev.shape[1], prev.shape[0]))
@@ -826,6 +831,7 @@ class Fixation_Detector():
 
 
         frame_number = 0 
+        flow_dict = {}
         
 
         #self = smooth_pixel_gaze(self, filter_size=5)
@@ -875,7 +881,25 @@ class Fixation_Detector():
 
                 # Visualize optical flow
 
-                flow_frame = np.array(flow)
+                flow_frame = np.array(flow) # Resolution is H x W x 2
+
+                if output_flow:
+                    if gaze_centered:
+                        
+                        if only_show_fixations and self.world_frame_fixation_bool[booleanIndexWorldFrames] == 1:
+
+                            np.save(self.flow_out_folder+str(frame_number)+".npy", flow_frame)
+
+                        else:
+
+                            np.save(self.flow_out_folder+str(frame_number)+".npy", flow_frame)
+                        #with open(self.subject_folder_path+'/retinal_flow.pickle', 'wb') as handle:
+                        #    pkl.dump(flow_dict, handle, protocol=pkl.HIGHEST_PROTOCOL)
+                    else:
+                        np.save(self.flow_out_folder+str(frame_number)+".npy", flow_frame)
+                        #with open(self.subject_folder_path+'/optic_flow.pickle', 'wb') as handle:
+                #    pkl.dump(flow_dict, handle, protocol=pkl.HIGHEST_PROTOCOL)
+
 
                 magnitude, angle = convert_flow_to_magnitude_angle(self, flow=flow_frame, bgr_world_in=frame,
                                                                         lower_mag_threshold=0,
@@ -902,17 +926,15 @@ class Fixation_Detector():
                 #flow_vis = cv2.cvtColor(flow_vis,cv2.COLOR_RGB2BGR)
                 #print (flow_vis.shape)
                 out.write(flow_vis)
-
             
             frame_number = frame_number + 1
 
             print (frame_number, " out of ", total_frames)
 
-
-
             # Break the loop if the 'q' key is pressed
             if cv2.waitKey(25) & 0xFF == ord('q'):
                 break
+        
 
 
         if output_flow:
@@ -944,6 +966,6 @@ detector.find_fixation_updated(eye_id=0,maxVel=maxVelocity, minVel=10, maxAcc=ma
 #detector.create_fixation_tracking_video(track_fixations=False, tracking_window=30)
 
 # This is an optic flow estimation function, BUT it can also be used to output the retina centered video. It currently does the entire video, not breaking it up into fixations. Though this can be done easily. 
-detector.estimate_optic_flow(gaze_centered=True, only_show_fixations=True, use_tracked_fixations=False, output_flow=False, output_centered_video=True)
+detector.estimate_optic_flow(gaze_centered=True, only_show_fixations=True, use_tracked_fixations=False, output_flow=True, output_centered_video=True)
 
 
