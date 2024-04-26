@@ -11,7 +11,9 @@ import math
 import time
 import matplotlib
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+from PIL import Image, ImageEnhance
 import PIL.Image
+
 import PIL
 import pickle as pkl
 #matplotlib.use("Agg") # This should make it so this will work on mac. If it messes something up on PC, comment it out. 
@@ -460,7 +462,8 @@ class Fixation_Detector():
                             bbox = (0, 0, gaze_window, gaze_window)
                         else:
                             bbox = (gaze_x-gaze_window, gaze_y-gaze_window, gaze_window*2, gaze_window*2)#cv2.selectROI("Frame", frame, fromCenter=False, showCrosshair=True)
-                            #print (bbox)
+                            
+                        print ("box", bbox)
                         tracker = cv2.legacy.TrackerMOSSE_create()
                         #print (bbox, tracker, frame.shape)
                         tracker.init(frame, bbox)
@@ -529,8 +532,273 @@ class Fixation_Detector():
         print ("Done fixation tracking in video.")
         return self
 
-    def estimate_optic_flow(self, gaze_centered=False,only_show_fixations=True, start_frame=0, visualize_as="color", use_tracked_fixations=False, output_flow=False, output_centered_video=False):
+    def create_fixation_tracking_video_updated(self, track_fixations=False, tracking_window=10, start_frame=1):
+        '''This function creates a video that tracks the initial position of a fixation in camera space to cut down on jitter. The pixel coordinates are
+        then saved, and so is the video.'''
+
+        print ("Starting fixation tracking.")
+
+        def add_gaze_to_detection_video(self, frame, frame_number, plot_gaze=True, color="r", fix=""):
+
+            gaze_data = self.gaze_positions_data
+
+            X = np.median(gaze_data.norm_pos_x[gaze_data.world_index == frame_number])
+            Y = (1-np.median(gaze_data.norm_pos_y[gaze_data.world_index == frame_number]))
+
+            timestamp = self.world_timestamps["# timestamps [seconds]"][frame_number]#gaze_data.gaze_timestamp[gaze_data.world_index == frame_number]
+            
+            if X == np.nan or Y == np.nan:
+                X = 1
+                Y = 1
+
+            if len(gaze_data.norm_pos_x[gaze_data.world_index == frame_number])==0:
+                X = 0
+                Y = 0
+
+            #X = np.mean(gaze_data_frame.norm_pos_x)
+            #Y = np.mean(gaze_data_frame.norm_pos_y)
+
+            width = frame.shape[0]
+            height = frame.shape[1]
+
+            #print (frame_number, X*height, Y*width)
+
+            center_coordinates = (int(X*height), int(Y*width))  # Change these coordinates as needed
+            radius = 10
+            if color=="g":
+                color = (0, 0, 255)  # Green color in BGR
+            elif color=="r":
+                color = (0, 255, 0)
+
+            thickness = 2
+
+            if plot_gaze:
+                frame_with_circle = cv2.circle(frame, center_coordinates, radius, color, thickness)
+            else:
+                frame_with_circle = frame
+
+            cv2.putText(frame, fix, (5, 50), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (0, 0, 255), 1)
+
+            #print (int(X*height), int(Y*width))
+            return (int(X*height), int(Y*width), frame_with_circle, timestamp)
+        
+        def create_graph_segment(self, frame_number, timestamp, frame_height, frame_width, num_frames, fps, time_frame=1.0):
+            
+            time = self.gaze_time
+            frames = np.linspace(0, num_frames, len(time))
+            velocity = self.gaze_velocity
+            acceleration = self.gaze_acceleration
+
+            #total_frames = self.world
+
+            #frame_number = frame_number*(fps)/30
+
+            #print (frame_number, timestamp, velocity[frame_number], acceleration[frame_number])
+
+            timesync = fps*time_frame
+
+            fig, ax = plt.subplots(3)
+
+            ax[2].plot(time, self.gaze_velocity, 'r')
+            #ax[2].plot(time, self.gaze_acceleration, 'b')
+            ax[2].plot(time, self.fixation_bool, 'g')
+            
+            if not math.isnan(timestamp):
+                ax[2].vlines(timestamp, 0, 1000, color='gray', alpha=0.5, linewidth=20)
+                ax[2].vlines(timestamp, 0, 1000, color='k', linewidth=2)
+                ax[2].set_xlim(timestamp-time_frame,timestamp+time_frame)
+            else:
+                print ("NaN time")
+            ax[2].set_ylim(0,200)
+            ax[2].set_ylabel("Pupil Angular Velocity")
+
+            ax[0].plot(self.pupil_frames, self.pupil_x_pos_norm)
+            ax[0].plot(self.pupil_frames, self.pupil_y_pos_norm)
+            ax[0].vlines(frame_number, 0, 1000, color='gray', alpha=0.5, linewidth=20)
+            ax[0].vlines(frame_number, 0, 1000, color='k', linewidth=2)
+            ax[0].set_xlim(frame_number-timesync, frame_number+timesync)
+            ax[0].set_ylim(0.3,0.65)
+            ax[0].set_ylabel("Pupil Norm. Position Eye Cam.")
+
+            ## Update this to visualize phi and theta instead -- Just to double check what it is doing. Also change the ylim on this (thesevalues) to investigate them further.
+            
+            #ax[1].plot(self.pupil_positions_data_world_Frame["theta"]-np.mean(self.pupil_positions_data_world_Frame["theta"]), "r")
+            #ax[1].plot(self.pupil_positions_data_world_Frame["circle_3d_normal_y"]-np.mean(self.pupil_positions_data_world_Frame["circle_3d_normal_y"]), "g")
+            ax[1].plot(self.pupil_positions_data_world_Frame["circle_3d_normal_x"]-np.mean(self.pupil_positions_data_world_Frame["circle_3d_normal_x"]), "r")
+            ax[1].plot(self.pupil_positions_data_world_Frame["circle_3d_normal_z"]-np.mean(self.pupil_positions_data_world_Frame["circle_3d_normal_z"]), "g")
+            #ax[1].plot(self.pupil_positions_data_world_Frame["ellipse_angle"], "b")
+            ax[1].vlines(frame_number, -1000, 1000, color='gray', alpha=0.5, linewidth=20)
+            ax[1].vlines(frame_number, -1000, 1000, color='k', linewidth=2)
+            ax[1].set_xlim(frame_number-timesync, frame_number+timesync)
+            ax[1].set_ylim(-0.08,0.08)
+            ax[1].set_ylabel("Eye Vector Norm. Position")
+
+            #plt.legend(["Velocity", "Acceleration", "Fixation (Yes/No)"])
+            #plt.xlim([624000,624010])
+
+            #middle_point = int(data['time'][int(len(data['time'])/2) ])
+            #upper_point = int(middle_point + 10)
+
+            #axs[1].set_xlim([middle_point, upper_point])
+
+            #gaze_vec = np.asarray(data['vec'])
+            #axs[0].plot(data['time'], gaze_vec[:,0],'r')
+            #axs[0].plot(data['time'], gaze_vec[:,1],'b')
+            #axs[0].plot(data['time'], gaze_vec[:,2],'g')
+
+            #axs[0].set_xlim([middle_point, upper_point])
+            #axs[0].set_xlim(timestamp-0.25,timestamp+0.25)
+
+            #plt.tight_layout()
+            fig = plt.gcf()
+            fig.set_size_inches(8, 7.2)
+            
+            fig.canvas.draw()
+            graph_img = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+            graph_img = graph_img.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+            # Define the size of the graph image
+            graph_height, graph_width, _ = graph_img.shape
+
+            # Create a blank canvas to place the graph image
+            blank_canvas = np.zeros((frame_height, graph_width, 3), dtype=np.uint8)
+
+            # Place the graph image on the blank canvas
+            blank_canvas[:graph_height, :] = graph_img
+
+            plt.close()
+
+            return blank_canvas
+
+        cap = self.world_video
+        fixations = self.fixations
+        gaze_window = tracking_window
+
+        # Check if video opened successfully
+        if not cap.isOpened():
+            print("Error: Unable to open the video file.")
+            exit()
+
+        frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+        cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame-1)
+
+        # Define codec and create VideoWriter object
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+
+        outvideo = cv2.VideoWriter(self.subject_folder_path+'/FixationTracking_withgraph.mp4', fourcc, fps, (2080, frame_height))
+
+        frame_number = 0 + start_frame
+        fixation_index = 0
+
+        tracked_gaze_positions = []
+
+        number_of_fixations = len(fixations["EndFrame"])-1
+        prevBool = 0
+        # Process frames to track the object
+        print ("Video processing starting.")
+        while cap.isOpened():
+            ret, frame = cap.read()
+
+            img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            im_pil = PIL.Image.fromarray(img)
+            new_image = ImageEnhance.Contrast(im_pil).enhance(1.5)
+            new_image = ImageEnhance.Sharpness(new_image).enhance(2.0)
+            frame = np.asarray(new_image)
+            frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+
+            if not ret:
+                break
+            
+            if frame_number >= len(self.world_frame_fixation_bool):
+                break
+            print (frame_number, self.world_frame_fixation_bool[frame_number])
+            booleanIndexWorldFrames = np.where(self.fixation_frame_world == frame_number)[0]
+            if self.world_frame_fixation_bool[booleanIndexWorldFrames] == 1: #frame_number>=fixations["StartFrame"][fixation_index] and frame_number<=fixations["EndFrame"][fixation_index]:
+                
+                if track_fixations:
+                    if (self.world_frame_fixation_bool[booleanIndexWorldFrames] == 1) and (prevBool==0):
+                        gaze_x, gaze_y, frame, timestamp = add_gaze_to_detection_video(self, frame, frame_number, plot_gaze=False)
+                        
+                        if gaze_x < 0 or gaze_y < 0:
+                            bbox = (0, 0, gaze_window, gaze_window)
+                        else:
+                            bbox = (gaze_x-gaze_window, gaze_y-gaze_window, gaze_window*2, gaze_window*2)#cv2.selectROI("Frame", frame, fromCenter=False, showCrosshair=True)
+                            #print (bbox)
+                        tracker = cv2.legacy.TrackerMOSSE_create()
+                        #print (bbox, tracker, frame.shape)
+                        tracker.init(frame, bbox)
+                        
+                    # Update the tracker
+                    success, bbox = tracker.update(frame)
+
+                    # Draw bounding box around the tracked object
+                    if success:
+                        (x, y, w, h) = [int(i) for i in bbox]
+                        gaze_position = (x+w/2 , y+h/2)
+                        gaze_x_tracked = gaze_position[0]
+                        gaze_y_tracked = gaze_position[1]
+                        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                    else:
+                        print ("Unsuccesful point tracking")
+
+                gaze_x, gaze_y, frame, timestamp = add_gaze_to_detection_video(self, frame, frame_number, plot_gaze=True, color="g", fix="Fixation")
+
+
+            else:
+                gaze_x, gaze_y, frame, timestamp = add_gaze_to_detection_video(self, frame, frame_number, plot_gaze=True, color="r", fix="No Fixation")
+                
+            
+            if track_fixations and success:
+                gaze_position = (frame_number, gaze_x_tracked, gaze_y_tracked)
+            else:
+                gaze_position = (frame_number, gaze_x, gaze_y)
+            
+
+            blank_canvas = create_graph_segment(self, frame_number, self.world_timestamps["# timestamps [seconds]"][frame_number], frame_height,frame_width, total_frames, fps)
+
+            cv2.putText(frame, str(np.round(frame_number)), (5, 30), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (0, 0, 255), 1)
+
+            combined_frame = np.hstack((frame, blank_canvas))
+            print (combined_frame.shape)
+
+            # Display the frame
+            cv2.imshow("Frame", combined_frame)
+
+            outvideo.write(combined_frame)
+
+            tracked_gaze_positions.append(gaze_position)
+
+            frame_number = frame_number + 1
+            prevBool = self.world_frame_fixation_bool[booleanIndexWorldFrames]
+
+            if frame_number>fixations["EndFrame"][fixation_index]:
+                fixation_index = fixation_index + 1
+
+            if frame_number == total_frames:
+                break
+        
+            # Press 'q' to exit
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+
+        np.save(self.subject_folder_path+"/trackedGazePositions", tracked_gaze_positions)
+        # Release video capture object
+        outvideo.release()
+        cap.release()
+
+        # Close all OpenCV windows
+        cv2.destroyAllWindows()
+        print ("Done fixation tracking in video.")
+        return self
+
+    def estimate_optic_flow(self, gaze_centered=False,only_show_fixations=True, start_frame=0, visualize_as="color", 
+                            use_tracked_fixations=False, output_flow=False, output_centered_video=False, overwrite_flow_folder=False, 
+                            resize_frame_scale="",remove_padding=False, padding_window_removed=200, use_CUDA=True):
         self.use_tracked_fixations = use_tracked_fixations
+        self.overwrite_flow_folder = overwrite_flow_folder
 
         def smooth_pixel_gaze(self, filter_size=5):
             filter_ = np.ones(filter_size)/filter_size
@@ -683,7 +951,7 @@ class Fixation_Detector():
             return cv2.cvtColor(image_from_plot,cv2.COLOR_BGR2RGB)
         
         
-        def create_gaze_centered_frame(self, frame, frame_index, padding_size):
+        def create_gaze_centered_frame(self, frame, frame_index, padding_size, remove_padding=False, padding_window_removed=200):
             '''Probably need to figure out how to do fixation detection and point tracking on the image over the duration of the fixation.'''
             height = np.shape(frame)[0]
             width = np.shape(frame)[1]
@@ -713,10 +981,11 @@ class Fixation_Detector():
             #fixation = self.world_frame_fixation_bool[booleanIndexWorldFrames]
 
 
-            if not (frame_index in gaze_data.world_index):
+            if not (frame_index in gaze_data.world_index) and not remove_padding:
                 return np.zeros((height*padding_size, width*padding_size, 3), np.uint8)
-            
-            #print (median_x, median_y)
+            elif not (frame_index in gaze_data.world_index) and remove_padding:
+                return np.zeros((padding_window_removed*2, padding_window_removed*2, 3), np.uint8)
+            print (median_x, median_y)
 
             if median_x < 0 :
                 median_x = np.NAN
@@ -727,11 +996,16 @@ class Fixation_Detector():
             elif median_y > 1:
                 median_y = np.NAN
 
-            if np.isnan(median_x) or np.isnan(median_y):
+            if (np.isnan(median_x) or np.isnan(median_y)) and not remove_padding:
                 return np.zeros((height*padding_size, width*padding_size, 3), np.uint8)
-
+            elif (np.isnan(median_x) or np.isnan(median_y)) and remove_padding:
+                return np.zeros((padding_window_removed*2, padding_window_removed*2, 3), np.uint8)
 
             new_image = np.zeros((height*padding_size,width*padding_size,3), np.uint8)
+
+            new_image_2 = np.zeros((height*padding_size,width*padding_size), np.uint8)
+
+            print (new_image.shape)
 
             center_x = (width * padding_size)/2.0
             center_y = (height * padding_size)/2.0
@@ -750,14 +1024,24 @@ class Fixation_Detector():
 
             #print (frame_index, height, width, medianpix_x, medianpix_y)
             #print (x1, x2, y1, y2)
+            ones_frame2 = np.ones([height, width])
+
+            print (new_image[ y1:y2,x1:x2,:].shape, new_image_2[ y1:y2,x1:x2].shape, frame.shape, ones_frame2.shape)
 
             new_image[ y1:y2,x1:x2,:] = frame
+            new_image_2[ y1:y2,x1:x2] = ones_frame2
             #print (new_image.shape)
             #new_image = cv2.line(new_image,(0, int(new_image.shape[0]/2)), (int(new_image.shape[1]),int(new_image.shape[0]/2)), (250,0,0),2)
             #new_image = cv2.line(new_image,(int(new_image.shape[1]/2), 0), (int(new_image.shape[1]/2),int(new_image.shape[0])), (250,0,0),2)
             # remove padding
-            #new_image = new_image[ height:height*2, width:width*2,:]
-
+            if remove_padding:
+                center_size = padding_window_removed
+                #height = new_image.shape[0]/2
+                #width = new_image.shape[1]/2
+                new_image = new_image[ height-center_size:height+center_size, width-center_size:width+center_size,:]
+                ones_frame = new_image_2[ height-center_size:height+center_size, width-center_size:width+center_size]
+                self.total_frames_at_pixel = self.total_frames_at_pixel + ones_frame
+            
             return new_image
         
 
@@ -774,41 +1058,51 @@ class Fixation_Detector():
 
         if output_flow:
             '''This function will only work is opencv was installed with CUDA/GPU support is install on the PC. I will add functionality so that it uses a more general optic flow algorithm.'''
-            # Create optical flow object
-            #optical_flow = cv2.cuda_OpticalFlowDual_TVL1.create()
-            #optical_flow.setNumScales(15) 
-            #optical_flow.setLambda(0.0004) 
-            #optical_flow.setScaleStep(0.6)
-            #optical_flow.setEpsilon(0.2)
-            #optical_flow.setTau(0.05)
-            #optical_flow.setGamma(0.1)
+           
+            if use_CUDA:
+                # Create optical flow object
+                #optical_flow = cv2.cuda_OpticalFlowDual_TVL1.create()
+                #optical_flow.setNumScales(15) 
+                #optical_flow.setLambda(0.0004) 
+                #optical_flow.setScaleStep(0.6)
+                #optical_flow.setEpsilon(0.2)
+                #optical_flow.setTau(0.05)
+                #optical_flow.setGamma(0.1)
 
-            optical_flow = cv2.cuda_FarnebackOpticalFlow.create()
+                optical_flow = cv2.cuda_FarnebackOpticalFlow.create()
+                print ("Using optical flow farneback ... Might be issues. If flow looks bad, use nonCUDA algorithm.")
 
-            #optical_flow = cv2.cuda_BroxOpticalFlow.create()
-            #optical_flow.setPyramidScaleFactor(2)
-            #optical_flow.setSolverIterations(50)
-            #optical_flow.setFlowSmoothness(1.9) # def alpha 0.197
-            # self.flow_algo.setGradientConstancyImportance() # def gamma 0
-            # self.flow_algo.setInnerIterations() # def 5
-            # self.flow_algo.setOuterIterations() # def 150
-            optical_flow.setNumLevels(30) # def 0
-            optical_flow.setPyrScale(0.5) # def 0
-            optical_flow.setPolySigma(10.2)
-            optical_flow.setWinSize(9)
-                
-            #optical_flow = cv2.cuda_DensePyrLKOpticalFlow.create()
-            #optical_flow.setMaxLevel(6)
-            #optical_flow.setWinSize((41, 41))
+                #optical_flow = cv2.cuda_BroxOpticalFlow.create()
+                #optical_flow.setPyramidScaleFactor(2)
+                #optical_flow.setSolverIterations(50)
+                #optical_flow.setFlowSmoothness(1.9) # def alpha 0.197
+                # self.flow_algo.setGradientConstancyImportance() # def gamma 0
+                # self.flow_algo.setInnerIterations() # def 5
+                # self.flow_algo.setOuterIterations() # def 150
+                optical_flow.setNumLevels(30) # def 0
+                optical_flow.setPyrScale(0.5) # def 0
+                optical_flow.setPolySigma(10.2)
+                optical_flow.setWinSize(9)
+                    
+                #optical_flow = cv2.cuda_DensePyrLKOpticalFlow.create()
+                #optical_flow.setMaxLevel(6)
+                #optical_flow.setWinSize((41, 41))
+            else:
+                optical_flow = cv2.optflow.createOptFlow_DeepFlow()
+
+
 
         if gaze_centered:
             padding_size = 2
             prev = np.zeros([prev.shape[0]*padding_size, prev.shape[1]*padding_size, 3])
+            prev_original = prev
+
             #params = {'perfPreset':cv2.cuda.NvidiaOpticalFlow_1_0_NV_OF_PERF_LEVEL_SLOW}
             #optical_flow = cv2.cuda.NvidiaOpticalFlow_1_0_create(prev.shape[1],prev.shape[0], **params)
         else:
             padding_size = 1
             prev = np.zeros([prev.shape[0], prev.shape[1], 3])
+            
             #params = {'perfPreset':cv2.cuda.NvidiaOpticalFlow_1_0_NV_OF_PERF_LEVEL_SLOW}
             #optical_flow = cv2.cuda.NvidiaOpticalFlow_1_0_create(prev.shape[1],prev.shape[0], **params)
 
@@ -816,15 +1110,31 @@ class Fixation_Detector():
         if output_flow:
             #prev_gray = cv2.cuda.cvtColor(np.float32(prev), cv2.COLOR_BGR2GRAY)
             self.flow_out_folder = self.subject_folder_path+"/Flow/"
+
+            if os.path.isdir(self.subject_folder_path+"/Flow/") and self.overwrite_flow_folder:
+                os.rmdir(self.subject_folder_path+"/Flow/")
+
             if not os.path.isdir(self.subject_folder_path+"/Flow/"):
                 os.mkdir(self.subject_folder_path+"/Flow/")
 
-            
+            if resize_frame_scale != "":
+                prev = cv2.resize(prev, (int(prev.shape[0]/resize_frame_scale), int(prev.shape[1]/resize_frame_scale)))
+
+            if remove_padding:
+                prev = cv2.resize(prev, (int(padding_window_removed*2), int(padding_window_removed*2)))
+
+
+            prev_original = prev
             if not gaze_centered:
                 out = cv2.VideoWriter(self.subject_folder_path+'/OpticFlow.mp4', cv2.VideoWriter_fourcc(*'mp4v'), 30, (prev.shape[1], prev.shape[0]))
             else:
-            
-                out = cv2.VideoWriter(self.subject_folder_path+'/GazeCenteredFlow.mp4', cv2.VideoWriter_fourcc(*'mp4v'), 30, (prev.shape[1], prev.shape[0]))
+                if self.use_tracked_fixations:
+                    if resize_frame_scale != "":
+                        out = cv2.VideoWriter(self.subject_folder_path+'/GazeCenteredFlowTrackedFixations.mp4', cv2.VideoWriter_fourcc(*'mp4v'), 30, (int(prev_original.shape[1]/resize_frame_scale), int(prev_original.shape[0]/resize_frame_scale)))
+                    else:
+                        out = cv2.VideoWriter(self.subject_folder_path+'/GazeCenteredFlowTrackedFixations.mp4', cv2.VideoWriter_fourcc(*'mp4v'), 30, (int(prev_original.shape[1]), int(prev_original.shape[0])))
+                else:
+                    out = cv2.VideoWriter(self.subject_folder_path+'/GazeCenteredFlow.mp4', cv2.VideoWriter_fourcc(*'mp4v'), 30, (prev.shape[1], prev.shape[0]))
 
         if output_centered_video and gaze_centered:
             out_centered = cv2.VideoWriter(self.subject_folder_path+'/GazeCenteredVideoRGB.mp4', cv2.VideoWriter_fourcc(*'mp4v'), 30, (prev.shape[1], prev.shape[0]))
@@ -832,6 +1142,15 @@ class Fixation_Detector():
 
         frame_number = 0 
         flow_dict = {}
+
+        first_fixation_frame = False
+        
+        print ("Remove Padding :", remove_padding)
+
+        if remove_padding:
+            self.total_frames_at_pixel = np.zeros([padding_window_removed*2, padding_window_removed*2])
+        else:
+            self.total_frames_at_pixel = np.zeros([prev.shape[0]*padding_size, prev.shape[1]*padding_size])
         
 
         #self = smooth_pixel_gaze(self, filter_size=5)
@@ -844,59 +1163,96 @@ class Fixation_Detector():
                 break
             
             if gaze_centered:
-                booleanIndexWorldFrames = np.where(self.fixation_frame_world == frame_number)[0]
+                
+                booleanIndexWorldFrames = np.where(np.int32(self.fixation_frame_world) == frame_number)[0]
+                print (frame_number, booleanIndexWorldFrames, self.world_frame_fixation_bool[booleanIndexWorldFrames])
 
                 if self.world_frame_fixation_bool[booleanIndexWorldFrames] == 1 and self.world_frame_fixation_bool[booleanIndexWorldFrames-1] == 0:
-                    prev = np.zeros([prev.shape[0]*padding_size, prev.shape[1]*padding_size, 3])
+                    first_fixation_frame = True
+                    prev = np.zeros([prev_original.shape[0], prev_original.shape[1], 3])
+                    if resize_frame_scale != "":
+                        prev = cv2.resize(prev, (int(prev.shape[0]/resize_frame_scale), int(prev.shape[1]/resize_frame_scale)))
 
                 if only_show_fixations:
                     if self.world_frame_fixation_bool[booleanIndexWorldFrames] == 1:
-                        
-                        frame = create_gaze_centered_frame(self, frame, frame_number, padding_size)
+                        print (frame.shape)
+                        frame = create_gaze_centered_frame(self, frame, frame_number, padding_size, remove_padding=remove_padding, padding_window_removed=padding_window_removed)
+                        print ("Zero: ", frame.shape)
                     else:
-                        frame = np.zeros([frame.shape[0]*padding_size, frame.shape[1]*padding_size, 3], dtype=np.uint8)
+                        frame = np.zeros([prev.shape[0]*padding_size, prev.shape[1]*padding_size, 3], dtype=np.uint8)
+                        print ("One: ", frame.shape)
+                        if remove_padding:
+                            frame = np.zeros([padding_window_removed*2, padding_window_removed*2, 3], dtype=np.uint8)
+                            print ("Two: ", frame.shape)
                 else:
-                    frame = create_gaze_centered_frame(self, frame, frame_number, padding_size)
+                    frame = create_gaze_centered_frame(self, frame, frame_number, padding_size, remove_padding=remove_padding, padding_window_removed=padding_window_removed)
+                    print ("Three: ", frame.shape)
                 
             if output_centered_video and gaze_centered:
-                cv2.putText(frame, str(np.round(frame_number)), (5, 30), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (0, 0, 255), 1)
+                #cv2.putText(frame, str(np.round(frame_number)), (5, 30), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (0, 0, 255), 1)
                 cv2.imshow("Centered Video", frame)
                 out_centered.write(frame)
             #print (prev_gray.shape, gray.shape)
                 
             #print (prev.shape, frame.shape)
+
+            if resize_frame_scale != "":
+                prev = cv2.resize(prev, (int(prev_original.shape[1]/resize_frame_scale), int(prev_original.shape[0]/resize_frame_scale)))
+                frame = cv2.resize(frame, (int(prev_original.shape[1]/resize_frame_scale), int(prev_original.shape[0]/resize_frame_scale)))
+
+            if remove_padding:
+                #prev = cv2.resize(prev, (int(padding_window_removed), int(padding_window_removed)))
+                #frame = cv2.resize(frame, (int(padding_window_removed), int(padding_window_removed)))
+                print ()
                 
             if output_flow:
+                print (prev.shape, frame.shape)
 
-                frame1_gpu = cv2.cuda_GpuMat()
-                frame1_gpu.upload(np.float32(prev))
+                if use_CUDA:
+                    frame1_gpu = cv2.cuda_GpuMat()
+                    frame1_gpu.upload(np.float32(prev))
 
-                frame2_gpu = cv2.cuda_GpuMat()
-                frame2_gpu.upload(np.float32(frame))
-                prev_gray = cv2.cuda.cvtColor(frame1_gpu, cv2.COLOR_BGR2GRAY)
-                gray = cv2.cuda.cvtColor(frame2_gpu, cv2.COLOR_BGR2GRAY)
-
+                    frame2_gpu = cv2.cuda_GpuMat()
+                    frame2_gpu.upload(np.float32(frame))
+                    prev_gray = cv2.cuda.cvtColor(frame1_gpu, cv2.COLOR_BGR2GRAY)
+                    gray = cv2.cuda.cvtColor(frame2_gpu, cv2.COLOR_BGR2GRAY)
+                    flow_gpu = optical_flow.calc(prev_gray, gray, None)
+                    # Download flow matrix from GPU
+                    flow = flow_gpu.download()
+                else:
+                    prev_gray = cv2.cvtColor(np.float32(prev), cv2.COLOR_BGR2GRAY)
+                    gray = cv2.cvtColor(np.float32(frame), cv2.COLOR_BGR2GRAY)
+                    flow = optical_flow.calc(prev_gray, gray, None)
                 # Calculate optical flow
                 # Calculate optical flow
-                flow_gpu = optical_flow.calc(prev_gray, gray, None)
+                
 
-                # Download flow matrix from GPU
-                flow = flow_gpu.download()
 
                 # Visualize optical flow
 
                 flow_frame = np.array(flow) # Resolution is H x W x 2
 
+                if self.world_frame_fixation_bool[booleanIndexWorldFrames] == 1 and self.world_frame_fixation_bool[booleanIndexWorldFrames+1] == 0:
+                    print ("Last Frame of fixation")
+                    flow_frame = np.zeros([flow_frame.shape[0], flow_frame.shape[1], 2])
+
+
                 if output_flow:
                     if gaze_centered:
                         
-                        if only_show_fixations and self.world_frame_fixation_bool[booleanIndexWorldFrames] == 1:
+                        if only_show_fixations and self.world_frame_fixation_bool[booleanIndexWorldFrames] == 1: 
+                            
+                            
+                            if first_fixation_frame:
+                                print ("First Fixation Frame. Not saving flow.")
+                            else:
+                                np.save(self.flow_out_folder+str(frame_number)+".npy", flow_frame)
+                        #else:
+                        #    continue
 
-                            np.save(self.flow_out_folder+str(frame_number)+".npy", flow_frame)
+                        #else:
 
-                        else:
-
-                            np.save(self.flow_out_folder+str(frame_number)+".npy", flow_frame)
+                            #np.save(self.flow_out_folder+str(frame_number)+".npy", flow_frame)
                         #with open(self.subject_folder_path+'/retinal_flow.pickle', 'wb') as handle:
                         #    pkl.dump(flow_dict, handle, protocol=pkl.HIGHEST_PROTOCOL)
                     else:
@@ -910,9 +1266,11 @@ class Fixation_Detector():
                                                                         upper_mag_threshold=50)
                 if visualize_as=="color":
                     flow_vis = visualize_flow_as_hsv(self, magnitude, angle)#(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), flow)
+                    cv2.imshow('Optical Flow', flow_vis)
                 elif visualize_as == "vectors":
-                    flow_vis = visualize_flow_as_vectors(self, frame, magnitude, angle, skippts=20, scale=.5,scale_units='width',
-                                            width=.0015, return_image=True)
+                    flow_vis = visualize_flow_as_vectors(self, frame, magnitude, angle, skippts=15, scale=.5,scale_units='width',
+                                            width=.0075, return_image=True)
+                    cv2.imshow('Optical Flow', flow_vis)
                 else:
                     print ("Flow visualization type not defined.")
                 
@@ -921,25 +1279,37 @@ class Fixation_Detector():
                 #cv2.line(flow_vis,(int(flow_vis.shape[1]/2), 0), (int(flow_vis.shape[1]/2),int(flow_vis.shape[0])), (250,0,0),2)
 
                 # Display the frame with optical flow
-                #cv2.imshow('Optical Flow', flow_vis)
-                cv2.putText(frame, str(np.round(frame_number)), (5, 30), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (0, 0, 255), 1)
+                
+                #cv2.putText(frame, str(np.round(frame_number)), (5, 30), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (0, 0, 255), 1)
 
                 # Update the previous frame and previous gray frame
-                
-                prev = frame#.copy()
+                if self.world_frame_fixation_bool[booleanIndexWorldFrames+1] == 0:
+                    #print ([prev_original.shape[0], prev_original.shape[1], 3])
+                    prev = np.zeros([prev_original.shape[0], prev_original.shape[1], 3])
+                    if resize_frame_scale != "":
+                        prev = cv2.resize(prev, (int(prev.shape[0]/resize_frame_scale), int(prev.shape[1]/resize_frame_scale)))
+                    if remove_padding:
+                        prev = np.zeros([padding_window_removed*2, padding_window_removed*2, 3])
+                else:
+                    prev = frame#.copy()
                 #flow_vis = cv2.cvtColor(flow_vis,cv2.COLOR_RGB2BGR)
                 #print (flow_vis.shape)
                 out.write(flow_vis)
             
             frame_number = frame_number + 1
 
-            print (frame_number, " out of ", total_frames)
+            first_fixation_frame = False
 
+            print (frame_number, " out of ", total_frames)
+            if frame_number >= total_frames-100:
+                break
             # Break the loop if the 'q' key is pressed
             if cv2.waitKey(25) & 0xFF == ord('q'):
                 break
         
-
+        
+        if remove_padding:
+            np.save(self.subject_folder_path + "/total_frames_at_pixel",self.total_frames_at_pixel)
 
         if output_flow:
             out.release()
@@ -952,8 +1322,8 @@ class Fixation_Detector():
 
         return self
 
-subject_folder = "Subject7" # Add subject folder name here
-gaze_folder = "001" # Within subject folder should be a gaze data folder --- something like 000 or 001
+subject_folder = "NP42324" # Add subject folder name here
+gaze_folder = "000" # Within subject folder should be a gaze data folder --- something like 000 or 001
                 # It will then search that for an export folder, and take export 000 from it and read in all the data
                 # Find fixations will find all of the fixations and save the data to the subject folder.
                 # Create fixation tracking video will create a video that shows fixations and plots the graph of the gaze velocities/accelerations next to it. 
@@ -962,14 +1332,17 @@ detector = Fixation_Detector(subject_folder_path=subject_folder, gaze_folder_nam
 
 detector.read_gaze_data(export_number="000")
 
-maxVelocity = 65  # Just change this and the next value to adjust how fixations are detected. They are angular velocity and acceleration of the eye. 
+maxVelocity = 45  # Just change this and the next value to adjust how fixations are detected. They are angular velocity and acceleration of the eye. 
 maxAcceleration = 20 # Not used
 
 detector.find_fixation_updated(eye_id=0,maxVel=maxVelocity, minVel=10, maxAcc=maxAcceleration, method="3d c++")
 
-#detector.create_fixation_tracking_video(track_fixations=False, tracking_window=30)
+#detector.create_fixation_tracking_video_updated(track_fixations=True, tracking_window=45)
 
 # This is an optic flow estimation function, BUT it can also be used to output the retina centered video. It currently does the entire video, not breaking it up into fixations. Though this can be done easily. 
-detector.estimate_optic_flow(gaze_centered=True, only_show_fixations=True, use_tracked_fixations=False, output_flow=True, output_centered_video=True)
+detector.estimate_optic_flow(gaze_centered=True, only_show_fixations=True, use_tracked_fixations=True,
+                              output_flow=True, output_centered_video=True, visualize_as="vectors",
+                                overwrite_flow_folder=True, remove_padding=True, padding_window_removed=250, use_CUDA=False)
 
+# Add functionality so that this outputs the head centered flow too (and doesn't overwrite the retina centered flow data)
 
