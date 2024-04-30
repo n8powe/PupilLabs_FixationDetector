@@ -21,16 +21,19 @@ import pickle as pkl
 
 class Fixation_Detector():
 
-    def __init__ (self, subject_folder_path, gaze_folder_name = "000"):
+    def __init__ (self, subject_folder_path, gaze_folder_name = "000", source="Core"):
 
         self.subject_folder_path = subject_folder_path
         self.gaze_folder_path = subject_folder_path + '/' + gaze_folder_name
+        self.eye_track_source = source
 
     def read_gaze_data(self, export_number="000", world_video_path=0):
         '''This function finds all of the paths and reads in all of the data for the gaze.
         It will assume that the useable export is from path 000 unless otherwise specified.'''
         print ("Reading gaze data.")
         gaze_data_path = self.gaze_folder_path
+
+        print ("Eye tracking source is: ", self.eye_track_source)
 
         if os.path.exists(gaze_data_path+'/exports') and os.path.isdir(gaze_data_path+'/exports'):
             print ("Gaze data exists and was exported correctly.")

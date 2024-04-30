@@ -17,5 +17,19 @@ This flow algorithm function also does gaze centering, and will output a retina 
 
 
 
+# Object Detection
 
-I added another script. It isn't finished, but it will calculate the motion statistics of the output estimated optic flow from the fixation finder script. It will also combine with the IMU data. 
+Uses a method of semantic segmentation of the scene. See MIT CSAIL implementation github. 
+            https://github.com/CSAILVision/semantic-segmentation-pytorch?tab=readme-ov-file
+
+Follow their method for installing the modules that are required to run the script. 
+
+Also, make sure that you have pyTorch installed. Follow this link to install if you don't already have it. 
+https://pytorch.org/get-started/locally/
+
+This script is computationally intensive, so having torch installed with CUDA support is really useful. 
+
+After that, download this folder https://drive.google.com/drive/folders/18kiZnw7zPW0Lu1BkbfrdbZO2zXv0QXo8?usp=sharing and add
+it to the path where the object detection script is located. 
+
+If you want more than just the video, make sure the save labels flag is set to true in the run_object_segmentation_on_video_MIT function. 
