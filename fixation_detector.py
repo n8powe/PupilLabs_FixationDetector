@@ -13,6 +13,7 @@ import matplotlib
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from PIL import Image, ImageEnhance
 import PIL.Image
+from scipy.io import savemat
 
 import PIL
 import pickle as pkl
@@ -71,14 +72,16 @@ class Fixation_Detector():
         self.gaze_positions_data["gaze_timestamp"] = self.gaze_positions_data["gaze_timestamp"] - self.gaze_positions_data["gaze_timestamp"][0]
 
         self.gaze_positions_data["Frames"] = self.gaze_positions_data["world_index"]
-        self.gaze_positions_data_Frame_avg = self.gaze_positions_data.groupby("world_index").mean()
+        #self.gaze_positions_data_Frame_avg = self.gaze_positions_data.groupby("world_index").mean()
 
         self.pupil_positions_data["pupil_timestamp_unix"] = (self.pupil_positions_data ["pupil_timestamp"] + start_timestamp_diff)*1000
         
         self.pupil_positions_data["Frames"] = self.pupil_positions_data["world_index"]
-        self.pupil_positions_data_world_Frame = self.pupil_positions_data.groupby("world_index").mean()
+        #self.pupil_positions_data_world_Frame = self.pupil_positions_data.groupby("world_index").mean()
 
-        #self.pupil_positions_data = self.pupil_positions_data.sort_values(by=["pupil_timestamp"])
+        self.pupil_positions_data_normX_avg = self.pupil_positions_data.groupby("world_index")["circle_3d_normal_x"].mean()
+        self.pupil_positions_data_normY_avg = self.pupil_positions_data.groupby("world_index")["circle_3d_normal_y"].mean()
+        self.pupil_positions_data_normZ_avg = self.pupil_positions_data.groupby("world_index")["circle_3d_normal_z"].mean()
 
         self.pupil_frame_one_unix_timestamp = self.gaze_positions_data["pupil_timestamp_unix"][0]*1000
 
@@ -241,6 +244,9 @@ class Fixation_Detector():
 
             dGood   = Diff(np.array(good).astype(np.int8))
 
+            plt.plot(dGood)
+            plt.show()
+
             start   = np.where(dGood==1)[0].tolist()
             end     = np.where(dGood==-1)[0].tolist()
 
@@ -272,6 +278,8 @@ class Fixation_Detector():
                         'EndFrame': fix_index[:,1], 
                         'FrameSpan': fix['framespan'],
                         'TimeSpan': fix['timespan']}
+            
+            print (out_df.shape, data.shape)
             
             out_df = pd.DataFrame(out_data)
 
@@ -627,8 +635,10 @@ class Fixation_Detector():
             
             #ax[1].plot(self.pupil_positions_data_world_Frame["theta"]-np.mean(self.pupil_positions_data_world_Frame["theta"]), "r")
             #ax[1].plot(self.pupil_positions_data_world_Frame["circle_3d_normal_y"]-np.mean(self.pupil_positions_data_world_Frame["circle_3d_normal_y"]), "g")
-            ax[1].plot(self.pupil_positions_data_world_Frame["circle_3d_normal_x"]-np.mean(self.pupil_positions_data_world_Frame["circle_3d_normal_x"]), "r")
-            ax[1].plot(self.pupil_positions_data_world_Frame["circle_3d_normal_z"]-np.mean(self.pupil_positions_data_world_Frame["circle_3d_normal_z"]), "g")
+            ax[1].plot(self.pupil_positions_data_normX_avg-np.mean(self.pupil_positions_data_normX_avg), "r")
+            ax[1].plot(self.pupil_positions_data_normY_avg-np.mean(self.pupil_positions_data_normY_avg), "r")
+            ax[1].plot(self.pupil_positions_data_normZ_avg-np.mean(self.pupil_positions_data_normZ_avg), "r")
+            
             #ax[1].plot(self.pupil_positions_data_world_Frame["ellipse_angle"], "b")
             ax[1].vlines(frame_number, -1000, 1000, color='gray', alpha=0.5, linewidth=20)
             ax[1].vlines(frame_number, -1000, 1000, color='k', linewidth=2)
@@ -799,7 +809,7 @@ class Fixation_Detector():
 
     def estimate_optic_flow(self, gaze_centered=False,only_show_fixations=True, start_frame=0, visualize_as="color", 
                             use_tracked_fixations=False, output_flow=False, output_centered_video=False, overwrite_flow_folder=False, 
-                            resize_frame_scale="",remove_padding=False, padding_window_removed=200, use_CUDA=True):
+                            resize_frame_scale="",remove_padding=False, padding_window_removed=200, use_CUDA=True, output_type="NPY"):
         self.use_tracked_fixations = use_tracked_fixations
         self.overwrite_flow_folder = overwrite_flow_folder
 
@@ -1249,7 +1259,12 @@ class Fixation_Detector():
                             if first_fixation_frame:
                                 print ("First Fixation Frame. Not saving flow.")
                             else:
-                                np.save(self.flow_out_folder+str(frame_number)+".npy", flow_frame)
+                                if output_type=="NPY":
+                                    np.save(self.flow_out_folder+str(frame_number)+".npy", flow_frame)
+                                elif output_type=="MAT":
+                                    flow_mat = {"dx": flow_frame[:,:,0], "dy": flow_frame[:,:,1]}
+                                    savemat(self.flow_out_folder+str(frame_number)+".mat", flow_mat)
+
                         #else:
                         #    continue
 
@@ -1259,7 +1274,11 @@ class Fixation_Detector():
                         #with open(self.subject_folder_path+'/retinal_flow.pickle', 'wb') as handle:
                         #    pkl.dump(flow_dict, handle, protocol=pkl.HIGHEST_PROTOCOL)
                     else:
-                        np.save(self.flow_out_folder+str(frame_number)+".npy", flow_frame)
+                        if output_type=="NPY":
+                            np.save(self.flow_out_folder+str(frame_number)+".npy", flow_frame)
+                        elif output_type=="MAT":
+                            flow_mat = {"dx": flow_frame[:,:,0], "dy": flow_frame[:,:,1]}
+                            savemat(self.flow_out_folder+str(frame_number)+".mat", flow_mat)
                         #with open(self.subject_folder_path+'/optic_flow.pickle', 'wb') as handle:
                 #    pkl.dump(flow_dict, handle, protocol=pkl.HIGHEST_PROTOCOL)
 
@@ -1325,8 +1344,8 @@ class Fixation_Detector():
 
         return self
 
-subject_folder = "NP42324" # Add subject folder name here
-gaze_folder = "000" # Within subject folder should be a gaze data folder --- something like 000 or 001
+subject_folder = "Subject7" # Add subject folder name here
+gaze_folder = "001" # Within subject folder should be a gaze data folder --- something like 000 or 001
                 # It will then search that for an export folder, and take export 000 from it and read in all the data
                 # Find fixations will find all of the fixations and save the data to the subject folder.
                 # Create fixation tracking video will create a video that shows fixations and plots the graph of the gaze velocities/accelerations next to it. 
@@ -1340,12 +1359,12 @@ maxAcceleration = 20 # Not used
 
 detector.find_fixation_updated(eye_id=0,maxVel=maxVelocity, minVel=10, maxAcc=maxAcceleration, method="3d c++")
 
-#detector.create_fixation_tracking_video_updated(track_fixations=True, tracking_window=45)
+detector.create_fixation_tracking_video_updated(track_fixations=True, tracking_window=45)
 
 # This is an optic flow estimation function, BUT it can also be used to output the retina centered video. It currently does the entire video, not breaking it up into fixations. Though this can be done easily. 
-detector.estimate_optic_flow(gaze_centered=True, only_show_fixations=True, use_tracked_fixations=True,
-                              output_flow=True, output_centered_video=True, visualize_as="vectors",
-                                overwrite_flow_folder=True, remove_padding=True, padding_window_removed=250, use_CUDA=False)
+#detector.estimate_optic_flow(gaze_centered=True, only_show_fixations=True, use_tracked_fixations=True,
+#                              output_flow=True, output_centered_video=True, visualize_as="vectors",
+#                                overwrite_flow_folder=True, remove_padding=True, padding_window_removed=250, use_CUDA=False, output_type="MAT")
 
 # Add functionality so that this outputs the head centered flow too (and doesn't overwrite the retina centered flow data)
 

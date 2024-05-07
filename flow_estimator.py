@@ -641,3 +641,10 @@ class Flow_Estimator():
         
 
         return self
+
+detector = Flow_Estimator(subject_folder_path=subject_folder, gaze_folder_name=gaze_folder)
+
+detector.read_gaze_data(export_number="000")
+detector.estimate_optic_flow(gaze_centered=True, only_show_fixations=True, use_tracked_fixations=True,
+                              output_flow=True, output_centered_video=True, visualize_as="vectors",
+                                overwrite_flow_folder=True, remove_padding=True, padding_window_removed=250, use_CUDA=False)
