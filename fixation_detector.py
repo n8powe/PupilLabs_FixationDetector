@@ -170,15 +170,15 @@ class Fixation_Detector():
 
                 t_forplotting = t[condition]
 
-                fig, ax = plt.subplots(3)
-                ax[0].plot(t_forplotting, x_pos_norm[condition], 'r')
-                ax[0].plot(t_forplotting, y_pos_norm[condition], 'b')
-                ax[1].plot(t_forplotting, self.pupil_velocity_eye_vid, 'r')
-                ax[2].plot(t_forplotting, self.pupil_acceleration_eye_vid, 'b')
-                ax[2].set_ylim(0,2000)
+                #fig, ax = plt.subplots(3)
+                #ax[0].plot(t_forplotting, x_pos_norm[condition], 'r')
+                #ax[0].plot(t_forplotting, y_pos_norm[condition], 'b')
+                #ax[1].plot(t_forplotting, self.pupil_velocity_eye_vid, 'r')
+                #ax[2].plot(t_forplotting, self.pupil_acceleration_eye_vid, 'b')
+                #ax[2].set_ylim(0,2000)
 
                 #plt.show()
-                plt.close()
+                #plt.close()
                 
                 
 
@@ -224,14 +224,13 @@ class Fixation_Detector():
             
             fix['isSaccade'] = good
 
-            good = np.abs(np.asarray(good)-1)
+            #good = np.abs(np.asarray(good)-1)
 
             vel = velocity < maxVel
 
-            #good = vel*acc*1
+            good = vel*1
 
 
-            #good = good*(acc*1)
             self.fixation_bool = good*maxVel
 
             #plt.close()
@@ -244,11 +243,15 @@ class Fixation_Detector():
 
             dGood   = Diff(np.array(good).astype(np.int8))
 
-            plt.plot(dGood)
-            plt.show()
+            #plt.plot(dGood)
+            #plt.show()
+
+            
 
             start   = np.where(dGood==1)[0].tolist()
             end     = np.where(dGood==-1)[0].tolist()
+
+            #print (len(dGood),len(start), len(end), self.number_world_video_frames)
 
             if len(start) > len(end):
                 start = start[0:len(start)-1]
@@ -269,6 +272,10 @@ class Fixation_Detector():
             good = np.ceil(alignWithWorldVideo["Good"])
             self.fixation_frame_world = np.ceil(alignWithWorldVideo["FrameSaved"])
 
+
+            #plt.plot(good)
+            #plt.show()
+
             
 
             self.world_frame_fixation_bool = np.asarray(np.int32(good))
@@ -279,9 +286,11 @@ class Fixation_Detector():
                         'FrameSpan': fix['framespan'],
                         'TimeSpan': fix['timespan']}
             
-            print (out_df.shape, data.shape)
+            
             
             out_df = pd.DataFrame(out_data)
+
+            #print (self.gaze_positions_data.shape, self.pupil_positions_data.shape, len(self.fixation_bool), len(good), len(self.fixation_frame_world))
 
             out_df.to_csv(self.subject_folder_path+"/FixationData.csv", index=False)
 
@@ -289,259 +298,6 @@ class Fixation_Detector():
             self.fixations = out_df
 
             return self
-    
-    def create_fixation_tracking_video(self, track_fixations=False, tracking_window=10):
-        '''This function creates a video that tracks the initial position of a fixation in camera space to cut down on jitter. The pixel coordinates are
-        then saved, and so is the video.'''
-
-        print ("Starting fixation tracking.")
-
-        def add_gaze_to_detection_video(self, frame, frame_number, plot_gaze=True, color="r", fix=""):
-
-            gaze_data = self.gaze_positions_data
-
-            X = np.median(gaze_data.norm_pos_x[gaze_data.world_index == frame_number])
-            Y = (1-np.median(gaze_data.norm_pos_y[gaze_data.world_index == frame_number]))
-
-            timestamp = self.world_timestamps["# timestamps [seconds]"][frame_number]#gaze_data.gaze_timestamp[gaze_data.world_index == frame_number]
-            
-            if X == np.nan or Y == np.nan:
-                X = 1
-                Y = 1
-
-            if len(gaze_data.norm_pos_x[gaze_data.world_index == frame_number])==0:
-                X = 0
-                Y = 0
-
-            #X = np.mean(gaze_data_frame.norm_pos_x)
-            #Y = np.mean(gaze_data_frame.norm_pos_y)
-
-            width = frame.shape[0]
-            height = frame.shape[1]
-
-            #print (frame_number, X*height, Y*width)
-
-            center_coordinates = (int(X*height), int(Y*width))  # Change these coordinates as needed
-            radius = 10
-            if color=="g":
-                color = (0, 0, 255)  # Green color in BGR
-            elif color=="r":
-                color = (0, 255, 0)
-
-            thickness = 2
-
-            if plot_gaze:
-                frame_with_circle = cv2.circle(frame, center_coordinates, radius, color, thickness)
-            else:
-                frame_with_circle = frame
-
-            cv2.putText(frame, fix, (5, 50), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (0, 0, 255), 1)
-
-            #print (int(X*height), int(Y*width))
-            return (int(X*height), int(Y*width), frame_with_circle, timestamp)
-        
-        def create_graph_segment(self, frame_number, timestamp, frame_height, frame_width, num_frames, fps, time_frame=1.0):
-            
-            time = self.gaze_time
-            frames = np.linspace(0, num_frames, len(time))
-            velocity = self.gaze_velocity
-            acceleration = self.gaze_acceleration
-
-            #total_frames = self.world
-
-            #frame_number = frame_number*(fps)/30
-
-            #print (frame_number, timestamp, velocity[frame_number], acceleration[frame_number])
-
-            timesync = fps*time_frame
-
-            fig, ax = plt.subplots(3)
-
-            ax[2].plot(time, self.gaze_velocity, 'r')
-            #ax[2].plot(time, self.gaze_acceleration, 'b')
-            ax[2].plot(time, self.fixation_bool, 'g')
-            
-            if not math.isnan(timestamp):
-                ax[2].vlines(timestamp, 0, 1000, color='gray', alpha=0.5, linewidth=20)
-                ax[2].vlines(timestamp, 0, 1000, color='k', linewidth=2)
-                ax[2].set_xlim(timestamp-time_frame,timestamp+time_frame)
-            else:
-                print ("NaN time")
-            ax[2].set_ylim(0,200)
-            ax[2].set_ylabel("Pupil Angular Velocity")
-
-            ax[0].plot(self.pupil_frames, self.pupil_x_pos_norm)
-            ax[0].plot(self.pupil_frames, self.pupil_y_pos_norm)
-            ax[0].vlines(frame_number, 0, 1000, color='gray', alpha=0.5, linewidth=20)
-            ax[0].vlines(frame_number, 0, 1000, color='k', linewidth=2)
-            ax[0].set_xlim(frame_number-timesync, frame_number+timesync)
-            ax[0].set_ylim(0.3,0.65)
-            ax[0].set_ylabel("Pupil Norm. Position Eye Cam.")
-
-
-            ax[1].plot(self.pupil_positions_data_world_Frame["circle_3d_normal_x"]-np.mean(self.pupil_positions_data_world_Frame["circle_3d_normal_x"]), "r")
-            ax[1].plot(self.pupil_positions_data_world_Frame["circle_3d_normal_y"]-np.mean(self.pupil_positions_data_world_Frame["circle_3d_normal_y"]), "g")
-            ax[1].plot(self.pupil_positions_data_world_Frame["circle_3d_normal_z"]-np.mean(self.pupil_positions_data_world_Frame["circle_3d_normal_z"]), "b")
-            ax[1].vlines(frame_number, -1000, 1000, color='gray', alpha=0.5, linewidth=20)
-            ax[1].vlines(frame_number, -1000, 1000, color='k', linewidth=2)
-            ax[1].set_xlim(frame_number-timesync, frame_number+timesync)
-            ax[1].set_ylim(-0.08,0.08)
-            ax[1].set_ylabel("Eye Vector Norm. Position")
-
-            #plt.legend(["Velocity", "Acceleration", "Fixation (Yes/No)"])
-            #plt.xlim([624000,624010])
-
-            #middle_point = int(data['time'][int(len(data['time'])/2) ])
-            #upper_point = int(middle_point + 10)
-
-            #axs[1].set_xlim([middle_point, upper_point])
-
-            #gaze_vec = np.asarray(data['vec'])
-            #axs[0].plot(data['time'], gaze_vec[:,0],'r')
-            #axs[0].plot(data['time'], gaze_vec[:,1],'b')
-            #axs[0].plot(data['time'], gaze_vec[:,2],'g')
-
-            #axs[0].set_xlim([middle_point, upper_point])
-            #axs[0].set_xlim(timestamp-0.25,timestamp+0.25)
-
-            #plt.tight_layout()
-            fig = plt.gcf()
-            fig.set_size_inches(8, 7.2)
-            
-            fig.canvas.draw()
-            graph_img = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
-            graph_img = graph_img.reshape(fig.canvas.get_width_height()[::-1] + (3,))
-            # Define the size of the graph image
-            graph_height, graph_width, _ = graph_img.shape
-
-            # Create a blank canvas to place the graph image
-            blank_canvas = np.zeros((frame_height, graph_width, 3), dtype=np.uint8)
-
-            # Place the graph image on the blank canvas
-            blank_canvas[:graph_height, :] = graph_img
-
-            plt.close()
-
-            return blank_canvas
-
-        cap = self.world_video
-        fixations = self.fixations
-        gaze_window = tracking_window
-
-        # Check if video opened successfully
-        if not cap.isOpened():
-            print("Error: Unable to open the video file.")
-            exit()
-
-        frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-
-        # Define codec and create VideoWriter object
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-
-        outvideo = cv2.VideoWriter(self.subject_folder_path+'/FixationTracking_withgraph.mp4', fourcc, fps, (2080, frame_height))
-
-        frame_number = 0 
-        fixation_index = 0
-        success = False
-
-        tracked_gaze_positions = []
-
-        number_of_fixations = len(fixations["EndFrame"])-1
-        prevBool = 0
-        # Process frames to track the object
-        print ("Video processing starting.")
-        while cap.isOpened():
-            ret, frame = cap.read()
-
-            if not ret:
-                break
-            
-            if frame_number >= len(self.world_frame_fixation_bool):
-                break
-            print (frame_number, self.world_frame_fixation_bool[frame_number])
-            booleanIndexWorldFrames = np.where(self.fixation_frame_world == frame_number)[0]
-            if self.world_frame_fixation_bool[booleanIndexWorldFrames] == 1: #frame_number>=fixations["StartFrame"][fixation_index] and frame_number<=fixations["EndFrame"][fixation_index]:
-                
-                if track_fixations:
-                    if (self.world_frame_fixation_bool[booleanIndexWorldFrames] == 1) and (prevBool==0):
-                        gaze_x, gaze_y, frame, timestamp = add_gaze_to_detection_video(self, frame, frame_number, plot_gaze=False)
-                        
-                        if gaze_x < 0 or gaze_y < 0:
-                            bbox = (0, 0, gaze_window, gaze_window)
-                        else:
-                            bbox = (gaze_x-gaze_window, gaze_y-gaze_window, gaze_window*2, gaze_window*2)#cv2.selectROI("Frame", frame, fromCenter=False, showCrosshair=True)
-                            
-                        print ("box", bbox)
-                        tracker = cv2.legacy.TrackerMOSSE_create()
-                        #print (bbox, tracker, frame.shape)
-                        tracker.init(frame, bbox)
-                        
-                    # Update the tracker
-                    success, bbox = tracker.update(frame)
-
-                    # Draw bounding box around the tracked object
-                    if success:
-                        (x, y, w, h) = [int(i) for i in bbox]
-                        gaze_position = (x+w/2 , y+h/2)
-                        gaze_x_tracked = gaze_position[0]
-                        gaze_y_tracked = gaze_position[1]
-                        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
-                    else:
-                        print ("Unsuccesful point tracking")
-
-                gaze_x, gaze_y, frame, timestamp = add_gaze_to_detection_video(self, frame, frame_number, plot_gaze=True, color="g", fix="Fixation")
-
-
-            else:
-                gaze_x, gaze_y, frame, timestamp = add_gaze_to_detection_video(self, frame, frame_number, plot_gaze=True, color="r", fix="No Fixation")
-                
-            
-            if track_fixations and success:
-                gaze_position = (frame_number, gaze_x_tracked, gaze_y_tracked)
-            else:
-                gaze_position = (frame_number, gaze_x, gaze_y)
-
-            
-
-            blank_canvas = create_graph_segment(self, frame_number, self.world_timestamps["# timestamps [seconds]"][frame_number], frame_height,frame_width, total_frames, fps)
-
-            cv2.putText(frame, str(np.round(frame_number)), (5, 30), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (0, 0, 255), 1)
-
-            combined_frame = np.hstack((frame, blank_canvas))
-            #print (combined_frame.shape)
-
-            # Display the frame
-            cv2.imshow("Frame", combined_frame)
-
-            outvideo.write(combined_frame)
-
-            tracked_gaze_positions.append(gaze_position)
-
-            frame_number = frame_number + 1
-            prevBool = self.world_frame_fixation_bool[booleanIndexWorldFrames]
-
-            if frame_number>fixations["EndFrame"][fixation_index]:
-                fixation_index = fixation_index + 1
-
-            if frame_number == total_frames:
-                break
-        
-            # Press 'q' to exit
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
-
-        np.save(self.subject_folder_path+"/trackedGazePositions", tracked_gaze_positions)
-        # Release video capture object
-        outvideo.release()
-        cap.release()
-
-        # Close all OpenCV windows
-        cv2.destroyAllWindows()
-        print ("Done fixation tracking in video.")
-        return self
 
     def create_fixation_tracking_video_updated(self, track_fixations=False, tracking_window=10, start_frame=1):
         '''This function creates a video that tracks the initial position of a fixation in camera space to cut down on jitter. The pixel coordinates are
@@ -610,6 +366,7 @@ class Fixation_Detector():
 
             fig, ax = plt.subplots(3)
 
+            print (time.shape, self.gaze_velocity.shape, len(self.fixation_bool))
             ax[2].plot(time, self.gaze_velocity, 'r')
             #ax[2].plot(time, self.gaze_acceleration, 'b')
             ax[2].plot(time, self.fixation_bool, 'g')
@@ -1344,8 +1101,8 @@ class Fixation_Detector():
 
         return self
 
-subject_folder = "Subject7" # Add subject folder name here
-gaze_folder = "001" # Within subject folder should be a gaze data folder --- something like 000 or 001
+subject_folder = "Subject4" # Add subject folder name here
+gaze_folder = "000" # Within subject folder should be a gaze data folder --- something like 000 or 001
                 # It will then search that for an export folder, and take export 000 from it and read in all the data
                 # Find fixations will find all of the fixations and save the data to the subject folder.
                 # Create fixation tracking video will create a video that shows fixations and plots the graph of the gaze velocities/accelerations next to it. 
@@ -1359,7 +1116,7 @@ maxAcceleration = 20 # Not used
 
 detector.find_fixation_updated(eye_id=0,maxVel=maxVelocity, minVel=10, maxAcc=maxAcceleration, method="3d c++")
 
-detector.create_fixation_tracking_video_updated(track_fixations=True, tracking_window=45)
+detector.create_fixation_tracking_video_updated(track_fixations=False, tracking_window=45)
 
 # This is an optic flow estimation function, BUT it can also be used to output the retina centered video. It currently does the entire video, not breaking it up into fixations. Though this can be done easily. 
 #detector.estimate_optic_flow(gaze_centered=True, only_show_fixations=True, use_tracked_fixations=True,

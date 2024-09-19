@@ -24,7 +24,7 @@ class Flow_Estimator():
 
         self.subject_folder_path = subject_folder_path
         self.gaze_folder_path = subject_folder_path + '/' + gaze_folder_name
-        self.eye_track_source = source
+        self.tracking_source = source
 
     def read_gaze_data(self, export_number="000", world_video_path=0):
             '''This function finds all of the paths and reads in all of the data for the gaze.
@@ -71,12 +71,12 @@ class Flow_Estimator():
                 self.gaze_positions_data["gaze_timestamp"] = self.gaze_positions_data["gaze_timestamp"] - self.gaze_positions_data["gaze_timestamp"][0]
 
                 self.gaze_positions_data["Frames"] = self.gaze_positions_data["world_index"]
-                self.gaze_positions_data_Frame_avg = self.gaze_positions_data.groupby("world_index").mean()
+                #self.gaze_positions_data_Frame_avg = self.gaze_positions_data.groupby("world_index").mean()
 
                 self.pupil_positions_data["pupil_timestamp_unix"] = (self.pupil_positions_data ["pupil_timestamp"] + start_timestamp_diff)*1000
                 
                 self.pupil_positions_data["Frames"] = self.pupil_positions_data["world_index"]
-                self.pupil_positions_data_world_Frame = self.pupil_positions_data.groupby("world_index").mean()
+                #self.pupil_positions_data_world_Frame = self.pupil_positions_data.groupby("world_index").mean()
 
                 #self.pupil_positions_data = self.pupil_positions_data.sort_values(by=["pupil_timestamp"])
 
@@ -399,10 +399,10 @@ class Flow_Estimator():
                 # self.flow_algo.setGradientConstancyImportance() # def gamma 0
                 # self.flow_algo.setInnerIterations() # def 5
                 # self.flow_algo.setOuterIterations() # def 150
-                optical_flow.setNumLevels(30) # def 0
-                optical_flow.setPyrScale(0.5) # def 0
-                optical_flow.setPolySigma(10.2)
-                optical_flow.setWinSize(9)
+                optical_flow.setNumLevels(20) # def 0
+                optical_flow.setPyrScale(.2) # def 0
+                optical_flow.setPolySigma(0.3)
+                optical_flow.setWinSize(40)
                     
                 #optical_flow = cv2.cuda_DensePyrLKOpticalFlow.create()
                 #optical_flow.setMaxLevel(6)
@@ -552,9 +552,11 @@ class Flow_Estimator():
 
                 flow_frame = np.array(flow) # Resolution is H x W x 2
 
-                if self.world_frame_fixation_bool[booleanIndexWorldFrames] == 1 and self.world_frame_fixation_bool[booleanIndexWorldFrames+1] == 0:
-                    print ("Last Frame of fixation")
-                    flow_frame = np.zeros([flow_frame.shape[0], flow_frame.shape[1], 2])
+                if gaze_centered:
+
+                    if self.world_frame_fixation_bool[booleanIndexWorldFrames] == 1 and self.world_frame_fixation_bool[booleanIndexWorldFrames+1] == 0:
+                        print ("Last Frame of fixation")
+                        flow_frame = np.zeros([flow_frame.shape[0], flow_frame.shape[1], 2])
 
 
                 if output_flow:
@@ -588,8 +590,8 @@ class Flow_Estimator():
                     flow_vis = visualize_flow_as_hsv(self, magnitude, angle)#(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), flow)
                     cv2.imshow('Optical Flow', flow_vis)
                 elif visualize_as == "vectors":
-                    flow_vis = visualize_flow_as_vectors(self, frame, magnitude, angle, skippts=15, scale=.5,scale_units='width',
-                                            width=.0075, return_image=True)
+                    flow_vis = visualize_flow_as_vectors(self, frame, magnitude, angle, skippts=12, scale=0.7,scale_units='width',
+                                            width=.0011, return_image=True)
                     cv2.imshow('Optical Flow', flow_vis)
                 else:
                     print ("Flow visualization type not defined.")
@@ -603,15 +605,16 @@ class Flow_Estimator():
                 #cv2.putText(frame, str(np.round(frame_number)), (5, 30), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (0, 0, 255), 1)
 
                 # Update the previous frame and previous gray frame
-                if self.world_frame_fixation_bool[booleanIndexWorldFrames+1] == 0:
-                    #print ([prev_original.shape[0], prev_original.shape[1], 3])
-                    prev = np.zeros([prev_original.shape[0], prev_original.shape[1], 3])
-                    if resize_frame_scale != "":
-                        prev = cv2.resize(prev, (int(prev.shape[0]/resize_frame_scale), int(prev.shape[1]/resize_frame_scale)))
-                    if remove_padding:
-                        prev = np.zeros([padding_window_removed*2, padding_window_removed*2, 3])
-                else:
-                    prev = frame#.copy()
+                if gaze_centered:
+                    if self.world_frame_fixation_bool[booleanIndexWorldFrames+1] == 0:
+                        #print ([prev_original.shape[0], prev_original.shape[1], 3])
+                        prev = np.zeros([prev_original.shape[0], prev_original.shape[1], 3])
+                        if resize_frame_scale != "":
+                            prev = cv2.resize(prev, (int(prev.shape[0]/resize_frame_scale), int(prev.shape[1]/resize_frame_scale)))
+                        if remove_padding:
+                            prev = np.zeros([padding_window_removed*2, padding_window_removed*2, 3])
+                    else:
+                        prev = frame#.copy()
                 #flow_vis = cv2.cvtColor(flow_vis,cv2.COLOR_RGB2BGR)
                 #print (flow_vis.shape)
                 out.write(flow_vis)
@@ -627,7 +630,8 @@ class Flow_Estimator():
             if cv2.waitKey(25) & 0xFF == ord('q'):
                 break
         
-        
+    
+
         if remove_padding:
             np.save(self.subject_folder_path + "/total_frames_at_pixel",self.total_frames_at_pixel)
 
@@ -642,9 +646,15 @@ class Flow_Estimator():
 
         return self
 
+subject_folder = "Subject7" # Add subject folder name here
+gaze_folder = "001" # Within subject folder should be a gaze data folder --- something like 000 or 001
+                # It will then search that for an export folder, and take export 000 from it and read in all the data
+                # Find fixations will find all of the fixations and save the data to the subject folder.
+                # Create fixation tracking video will create a video that shows fixations and plots the graph of the gaze velocities/accelerations next to it. 
+
 detector = Flow_Estimator(subject_folder_path=subject_folder, gaze_folder_name=gaze_folder)
 
 detector.read_gaze_data(export_number="000")
-detector.estimate_optic_flow(gaze_centered=True, only_show_fixations=True, use_tracked_fixations=True,
-                              output_flow=True, output_centered_video=True, visualize_as="vectors",
-                                overwrite_flow_folder=True, remove_padding=True, padding_window_removed=250, use_CUDA=False)
+detector.estimate_optic_flow(gaze_centered=False, only_show_fixations=False, use_tracked_fixations=False,
+                              output_flow=True, output_centered_video=False, visualize_as="vectors",
+                                overwrite_flow_folder=False, remove_padding=False, padding_window_removed=250, use_CUDA=True)
