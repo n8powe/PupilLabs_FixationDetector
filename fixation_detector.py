@@ -36,59 +36,118 @@ class Fixation_Detector():
 
         print ("Eye tracking source is: ", self.eye_track_source)
 
-        if os.path.exists(gaze_data_path+'/exports') and os.path.isdir(gaze_data_path+'/exports'):
-            print ("Gaze data exists and was exported correctly.")
-        else:
-            print (gaze_data_path+'/exports')
-            raise ValueError("Gaze data was not exported. Export from pupil player.")
+        if self.eye_track_source=="Core":
 
-        self.gaze_positions_data = pd.read_csv(self.gaze_folder_path + '/exports/'+export_number+'/gaze_positions.csv')
-        self.gaze_positions_data_path = self.gaze_folder_path + '/exports/'+export_number+'/gaze_positions.csv'
-        self.pupil_positions_data = pd.read_csv(self.gaze_folder_path + '/exports/'+export_number+'/pupil_positions.csv')
-        self.pupil_positions_data_path = self.gaze_folder_path + '/exports/'+export_number+'/pupil_positions.csv'
+            if os.path.exists(gaze_data_path+'/exports') and os.path.isdir(gaze_data_path+'/exports'):
+                print ("Gaze data exists and was exported correctly.")
+            else:
+                print (gaze_data_path+'/exports')
+                raise ValueError("Gaze data was not exported. Export from pupil player.")
+
+            self.gaze_positions_data = pd.read_csv(self.gaze_folder_path + '/exports/'+export_number+'/gaze_positions.csv')
+            self.gaze_positions_data_path = self.gaze_folder_path + '/exports/'+export_number+'/gaze_positions.csv'
+            self.pupil_positions_data = pd.read_csv(self.gaze_folder_path + '/exports/'+export_number+'/pupil_positions.csv')
+            self.pupil_positions_data_path = self.gaze_folder_path + '/exports/'+export_number+'/pupil_positions.csv'
 
 
-        self.world_timestamps = pd.read_csv(self.gaze_folder_path + '/exports/'+export_number+'/world_timestamps.csv')
-        
+            self.world_timestamps = pd.read_csv(self.gaze_folder_path + '/exports/'+export_number+'/world_timestamps.csv')
+            
 
-        if world_video_path == 0:
-            self.world_video = cv2.VideoCapture(self.gaze_folder_path + '/world.mp4')
-            self.world_video_path = self.gaze_folder_path + '/world.mp4'
-        else:
-            self.world_video = cv2.VideoCapture(world_video_path)
-            self.world_video_path = world_video_path
+            if world_video_path == 0:
+                self.world_video = cv2.VideoCapture(self.gaze_folder_path + '/world.mp4')
+                self.world_video_path = self.gaze_folder_path + '/world.mp4'
+            else:
+                self.world_video = cv2.VideoCapture(world_video_path)
+                self.world_video_path = world_video_path
 
-        self.pupil_depth_video_path = self.gaze_folder_path + '/exports/'+export_number+'/depth.mp4'
-        self.pupil_depth_video = cv2.VideoCapture(self.pupil_depth_video_path)
+            self.pupil_depth_video_path = self.gaze_folder_path + '/exports/'+export_number+'/depth.mp4'
+            self.pupil_depth_video = cv2.VideoCapture(self.pupil_depth_video_path)
 
-        with pathlib.Path(self.gaze_folder_path+"/").joinpath("info.player.json").open() as file:
-            meta_info = json.load(file)
+            with pathlib.Path(self.gaze_folder_path+"/").joinpath("info.player.json").open() as file:
+                meta_info = json.load(file)
 
-        start_timestamp_unix = meta_info["start_time_system_s"]
-        start_timestamp_pupil = meta_info["start_time_synced_s"]
-        start_timestamp_diff = start_timestamp_unix - start_timestamp_pupil
-        
-        self.gaze_positions_data["pupil_timestamp_unix"] = self.gaze_positions_data ["gaze_timestamp"] + start_timestamp_diff
-        self.gaze_positions_data["gaze_timestamp"] = self.gaze_positions_data["gaze_timestamp"] - self.gaze_positions_data["gaze_timestamp"][0]
+            start_timestamp_unix = meta_info["start_time_system_s"]
+            start_timestamp_pupil = meta_info["start_time_synced_s"]
+            start_timestamp_diff = start_timestamp_unix - start_timestamp_pupil
+            
+            self.gaze_positions_data["pupil_timestamp_unix"] = self.gaze_positions_data ["gaze_timestamp"] + start_timestamp_diff
+            self.gaze_positions_data["gaze_timestamp"] = self.gaze_positions_data["gaze_timestamp"] - self.gaze_positions_data["gaze_timestamp"][0]
 
-        self.gaze_positions_data["Frames"] = self.gaze_positions_data["world_index"]
-        #self.gaze_positions_data_Frame_avg = self.gaze_positions_data.groupby("world_index").mean()
+            self.gaze_positions_data["Frames"] = self.gaze_positions_data["world_index"]
+            self.gaze_positions_data_Frame_avg = self.gaze_positions_data.groupby("world_index").mean()
 
-        self.pupil_positions_data["pupil_timestamp_unix"] = (self.pupil_positions_data ["pupil_timestamp"] + start_timestamp_diff)*1000
-        
-        self.pupil_positions_data["Frames"] = self.pupil_positions_data["world_index"]
-        #self.pupil_positions_data_world_Frame = self.pupil_positions_data.groupby("world_index").mean()
+            self.pupil_positions_data["pupil_timestamp_unix"] = (self.pupil_positions_data ["pupil_timestamp"] + start_timestamp_diff)*1000
+            
+            self.pupil_positions_data["Frames"] = self.pupil_positions_data["world_index"]
+            self.pupil_positions_data_world_Frame = self.pupil_positions_data.groupby("world_index").mean()
 
-        self.pupil_positions_data_normX_avg = self.pupil_positions_data.groupby("world_index")["circle_3d_normal_x"].mean()
-        self.pupil_positions_data_normY_avg = self.pupil_positions_data.groupby("world_index")["circle_3d_normal_y"].mean()
-        self.pupil_positions_data_normZ_avg = self.pupil_positions_data.groupby("world_index")["circle_3d_normal_z"].mean()
+            #self.pupil_positions_data = self.pupil_positions_data.sort_values(by=["pupil_timestamp"])
 
-        self.pupil_frame_one_unix_timestamp = self.gaze_positions_data["pupil_timestamp_unix"][0]*1000
+            self.pupil_frame_one_unix_timestamp = self.gaze_positions_data["pupil_timestamp_unix"][0]*1000
 
-        self.number_world_video_frames = int(self.world_video.get(cv2.CAP_PROP_FRAME_COUNT))
+            self.number_world_video_frames = int(self.world_video.get(cv2.CAP_PROP_FRAME_COUNT))
 
-        self.world_timestamps_unix = 1000*(self.world_timestamps["# timestamps [seconds]"] + start_timestamp_diff)
-        self.world_timestamps["# timestamps [seconds]"] = self.world_timestamps["# timestamps [seconds]"] - self.world_timestamps["# timestamps [seconds]"][0]
+            self.world_timestamps_unix = 1000*(self.world_timestamps["# timestamps [seconds]"] + start_timestamp_diff)
+            self.world_timestamps["# timestamps [seconds]"] = self.world_timestamps["# timestamps [seconds]"] - self.world_timestamps["# timestamps [seconds]"][0]
+
+        elif self.eye_track_source=="Neon":
+            
+            if os.path.exists(gaze_data_path) and os.path.isdir(gaze_data_path):
+                print ("Gaze data exists and was exported correctly.")
+            else:
+                print (gaze_data_path)
+                raise ValueError("Data does not exist given the current path.")
+
+            self.gaze_positions_data = pd.read_csv(self.gaze_folder_path + '/gaze.csv')
+            self.gaze_positions_data_path = self.gaze_folder_path + '/gaze.csv'
+            # Add code that adds frame numbers to gaze_positions_data based on timestamps in this dataframe and the world timestamps
+            self.pupil_positions_data = pd.read_csv(self.gaze_folder_path + '/3d_eye_states.csv')
+            self.pupil_positions_data_path = self.gaze_folder_path + '/3d_eye_states.csv'
+
+
+            self.world_timestamps = pd.read_csv(self.gaze_folder_path + '/world_timestamps.csv')
+            
+
+            if world_video_path == 0:
+                self.world_video = cv2.VideoCapture(self.gaze_folder_path + '/neon_scene.mp4')
+                self.world_video_path = self.gaze_folder_path + '/neon_scene.mp4'
+            else:
+                self.world_video = cv2.VideoCapture(world_video_path)
+                self.world_video_path = world_video_path
+
+            with pathlib.Path(self.gaze_folder_path+"/").joinpath("info.json").open() as file:
+                meta_info = json.load(file)
+
+            start_timestamp_unix = meta_info["start_time"]
+            start_timestamp_pupil = meta_info["start_time"]
+            start_timestamp_diff = start_timestamp_unix - 0#start_timestamp_pupil
+            
+            self.gaze_positions_data["pupil_timestamp_unix"] = self.gaze_positions_data ["timestamp [ns]"] + start_timestamp_diff
+            self.gaze_positions_data["gaze_timestamp"] = self.gaze_positions_data["timestamp [ns]"] - self.gaze_positions_data["timestamp [ns]"][0]
+
+            #self.gaze_positions_data["Frames"] = self.gaze_positions_data["world_index"]
+            #self.gaze_positions_data_Frame_avg = self.gaze_positions_data.groupby("world_index").mean()
+
+            self.pupil_positions_data["pupil_timestamp_unix"] = (self.pupil_positions_data ["timestamp [ns]"] + start_timestamp_diff)
+            
+            #self.pupil_positions_data["Frames"] = self.pupil_positions_data["world_index"]
+            #self.pupil_positions_data_world_Frame = self.pupil_positions_data.groupby("world_index").mean()
+
+            #self.pupil_positions_data = self.pupil_positions_data.sort_values(by=["pupil_timestamp"])
+
+            self.pupil_frame_one_unix_timestamp = self.gaze_positions_data["pupil_timestamp_unix"][0]
+
+            self.number_world_video_frames = int(self.world_video.get(cv2.CAP_PROP_FRAME_COUNT))
+
+            self.world_timestamps_unix = (self.world_timestamps["timestamp [ns]"] + start_timestamp_diff)
+            #self.world_timestamps["# timestamps [seconds]"] = self.world_timestamps["timestamp [ns]"] - self.world_timestamps["timestamp [ns]"][0]
+            numEyeTrackFrames = self.gaze_positions_data.shape[0]
+            self.gaze_positions_data["world_index"] = np.nan
+            for i in range(0, numEyeTrackFrames):
+                eyeTime = self.gaze_positions_data ["timestamp [ns]"][i]
+                frame_min = np.argmin(np.abs(eyeTime-self.world_timestamps["timestamp [ns]"]))
+                
+                self.gaze_positions_data["world_index"][i] = frame_min+1
 
         print ("Gaze Data imported correctly.")
 
@@ -121,83 +180,63 @@ class Fixation_Detector():
                 def Max(arr, width):      return np.nanmax(     Local.Local(arr, width), axis=0 )
             
             def Load(path, eye_id = 0, method="pye3d 0.3.0 post-hoc"):
-                data    = pd.read_csv(path)
-                data["pupil_timestamp"] = data["pupil_timestamp"] - data["pupil_timestamp"][0]
-                
-                index   = (data.eye_id == eye_id) * (data.method == method)
-                #print (index)
-                raw = {}
-                raw['time']   = np.array(list(data.pupil_timestamp[index])) #- np.array(data.pupil_timestamp[index][0])
-                filt_sz = 2
-                # Uncomment the next line if you want to smooth the vector components
-                #raw['vec']    = np.column_stack([Local.Mean(data.circle_3d_normal_x[index], width=filt_sz), Local.Mean(data.circle_3d_normal_y[index], width=filt_sz), Local.Mean(data.circle_3d_normal_z[index], width=filt_sz)])
-                raw['vec']    = np.column_stack([data.circle_3d_normal_x[index], data.circle_3d_normal_y[index], data.circle_3d_normal_z[index]])
-                
-                raw['frame'] = np.array(list(data.world_index[index]))
+                if self.eye_track_source=="Core":
+                    data    = pd.read_csv(path)
+                    data["pupil_timestamp"] = data["pupil_timestamp"] - data["pupil_timestamp"][0]
+                    
+                    index   = (data.eye_id == eye_id) * (data.method == method)
+                    #print (index)
+                    raw = {}
+                    raw['time']   = np.array(list(data.pupil_timestamp[index])) #- np.array(data.pupil_timestamp[index][0])
+                    filt_sz = 2
+                    # Uncomment the next line if you want to smooth the vector components
+                    #raw['vec']    = np.column_stack([Local.Mean(data.circle_3d_normal_x[index], width=filt_sz), Local.Mean(data.circle_3d_normal_y[index], width=filt_sz), Local.Mean(data.circle_3d_normal_z[index], width=filt_sz)])
+                    raw['vec']    = np.column_stack([data.circle_3d_normal_x[index], data.circle_3d_normal_y[index], data.circle_3d_normal_z[index]])
+                    
+                    raw['frame'] = np.array(list(data.world_index[index]))
+                elif self.eye_track_source=="Neon":
+                    data    = pd.read_csv(path)
+                    data["pupil_timestamp"] = (data["timestamp [ns]"] - data["timestamp [ns]"][0])/1000000000
+                    
+                    #index   = (data.eye_id == eye_id) * (data.method == method)
+                    #print (index)
+                    raw = {}
+                    raw['time']   = np.array(list(data.pupil_timestamp)) #- np.array(data.pupil_timestamp[index][0])
+                    filt_sz = 2
+                    # Uncomment the next line if you want to smooth the vector components
+                    #raw['vec']    = np.column_stack([Local.Mean(data.circle_3d_normal_x[index], width=filt_sz), Local.Mean(data.circle_3d_normal_y[index], width=filt_sz), Local.Mean(data.circle_3d_normal_z[index], width=filt_sz)])
+                    raw['vec']    = np.column_stack([data["optical axis right x"], data["optical axis right y"], data["optical axis right z"]])
+                    print (len(data["optical axis right x"]))
+                    index = np.linspace(0, len(data["optical axis right x"]), len(data["optical axis right x"]))
+                    print (index)
+                    raw['frame'] = np.array(list(index))       
 
                 return raw
             
-            def find_eye_velocities_in_pixel_space(self, eye_id, method):
-                '''This function finds the velocity of the eye in eye video space, normalized between 0-1'''
-                index   = (self.pupil_positions_data.eye_id == eye_id) * (self.pupil_positions_data.method == method)
-                x_pos_norm = Local.Mean(self.pupil_positions_data.norm_pos_x[index], width=2)#*400/2
-                y_pos_norm = 1-Local.Mean(self.pupil_positions_data.norm_pos_y[index], width=2)#*400/2) # We recorded at 400x400 pixels. Subtracting from 1 gives the correct Y position. 
 
-                dt     = Diff(self.pupil_positions_data.pupil_timestamp[index])
-                t = self.pupil_positions_data.pupil_timestamp[index] - self.pupil_positions_data.pupil_timestamp[0]
+            if self.eye_track_source=="Core":
+                if pupil_file_path=="pupil_positions.csv":
+                    data = Load(self.pupil_positions_data_path, eye_id=0, method=method)
+                else:
+                    data = Load(pupil_file_path, eye_id=0, method=method)
 
-                dx = (((Diff(x_pos_norm)/39/dt)))**2
-                dy = (((Diff(y_pos_norm)/39/dt)))**2
+                #find_eye_velocities_in_pixel_space(self, eye_id, method)
+            elif self.eye_track_source=="Neon":
 
-                velocity_magnitude = Local.Mean(np.sqrt(dx + dy), width=2)
-                acceleration = Diff(velocity_magnitude)/dt
+                data = Load(self.pupil_positions_data_path, eye_id="right", method="")
 
-                condition = velocity_magnitude<1000 # Filter out large values
 
-                self.pupil_velocity_eye_vid = velocity_magnitude[condition]
-
-                self.pupil_acceleration_eye_vid = np.abs(acceleration[condition])
-
-                self.dt_pupil_data = t[condition]#dt[condition]
-
-                self.pupil_frames = self.pupil_positions_data.world_index[index]
-                self.pupil_frames = self.pupil_frames[condition]
-
-                self.pupil_x_pos_norm = x_pos_norm[condition]
-                self.pupil_y_pos_norm = y_pos_norm[condition]
-
-                #print (velocity_magnitude)
-
-                t_forplotting = t[condition]
-
-                #fig, ax = plt.subplots(3)
-                #ax[0].plot(t_forplotting, x_pos_norm[condition], 'r')
-                #ax[0].plot(t_forplotting, y_pos_norm[condition], 'b')
-                #ax[1].plot(t_forplotting, self.pupil_velocity_eye_vid, 'r')
-                #ax[2].plot(t_forplotting, self.pupil_acceleration_eye_vid, 'b')
-                #ax[2].set_ylim(0,2000)
-
-                #plt.show()
-                #plt.close()
-                
-                
-
-                return self
-
-            if pupil_file_path=="pupil_positions.csv":
-                data = Load(self.pupil_positions_data_path, eye_id=0, method=method)
-            else:
-                data = Load(pupil_file_path, eye_id=0, method=method)
-
-            find_eye_velocities_in_pixel_space(self, eye_id, method)
+                #find_eye_velocities_in_pixel_space(self, eye_id, method)
 
             fix = {}
             
             dt     = Diff(data['time'])
             ang    = Angle( data['vec'] ) * (180/np.pi)
-            
+                
 
             fix['vel']    = ang / dt
+            #plt.plot(dt)
+            #plt.show()
             condition = fix['vel']<500
             velocity = fix['vel'][condition]          ######## Change filter size or function if desired. I set it to 10, but that is kind of long. 
             velocity = Local.Mean(velocity, width=2)  # small filter?
@@ -239,7 +278,7 @@ class Fixation_Detector():
             #plt.plot(data['time'][condition], self.fixation_bool, 'g')
             #plt.xlim([1600, 1620])
             #plt.ylim([-1, 100])
-            #plt.show()
+            plt.show()
 
             dGood   = Diff(np.array(good).astype(np.int8))
 
@@ -251,7 +290,7 @@ class Fixation_Detector():
             start   = np.where(dGood==1)[0].tolist()
             end     = np.where(dGood==-1)[0].tolist()
 
-            #print (len(dGood),len(start), len(end), self.number_world_video_frames)
+            print (len(dGood),len(start), len(end), self.number_world_video_frames)
 
             if len(start) > len(end):
                 start = start[0:len(start)-1]
@@ -293,6 +332,8 @@ class Fixation_Detector():
             #print (self.gaze_positions_data.shape, self.pupil_positions_data.shape, len(self.fixation_bool), len(good), len(self.fixation_frame_world))
 
             out_df.to_csv(self.subject_folder_path+"/FixationData.csv", index=False)
+            
+
 
             print ("Done finding fixations from pupil csv data. Saved to subject folder.")
             self.fixations = out_df
@@ -308,27 +349,42 @@ class Fixation_Detector():
         def add_gaze_to_detection_video(self, frame, frame_number, plot_gaze=True, color="r", fix=""):
 
             gaze_data = self.gaze_positions_data
-
-            X = np.median(gaze_data.norm_pos_x[gaze_data.world_index == frame_number])
-            Y = (1-np.median(gaze_data.norm_pos_y[gaze_data.world_index == frame_number]))
-
-            timestamp = self.world_timestamps["# timestamps [seconds]"][frame_number]#gaze_data.gaze_timestamp[gaze_data.world_index == frame_number]
             
-            if X == np.nan or Y == np.nan:
-                X = 1
-                Y = 1
+            width = frame.shape[0]
+            height = frame.shape[1]
+            if self.eye_track_source=="Core":
+                X = np.median(gaze_data.norm_pos_x[gaze_data.world_index == frame_number])
+                Y = (1-np.median(gaze_data.norm_pos_y[gaze_data.world_index == frame_number]))
 
-            if len(gaze_data.norm_pos_x[gaze_data.world_index == frame_number])==0:
-                X = 0
-                Y = 0
+                timestamp = self.world_timestamps["# timestamps [seconds]"][frame_number]#gaze_data.gaze_timestamp[gaze_data.world_index == frame_number]
+                
+                if X == np.nan or Y == np.nan:
+                    X = 1
+                    Y = 1
+
+                if len(gaze_data.norm_pos_x[gaze_data.world_index == frame_number])==0:
+                    X = 0
+                    Y = 0
+            elif self.eye_track_source=="Neon":
+                #print (gaze_data.world_index)
+                X = np.median(gaze_data["gaze x [px]"][gaze_data.world_index == frame_number])/height
+                Y = (np.median(gaze_data["gaze y [px]"][gaze_data.world_index == frame_number]))/width
+                timestamp = gaze_data["timestamp [ns]"][frame_number]#gaze_data.gaze_timestamp[gaze_data.world_index == frame_number]
+                
+                if X == np.nan or Y == np.nan:
+                    X = 1
+                    Y = 1
+
+                if len(gaze_data["gaze y [px]"][gaze_data.world_index == frame_number])==0:
+                    X = 0
+                    Y = 0
 
             #X = np.mean(gaze_data_frame.norm_pos_x)
             #Y = np.mean(gaze_data_frame.norm_pos_y)
 
-            width = frame.shape[0]
-            height = frame.shape[1]
 
-            #print (frame_number, X*height, Y*width)
+
+            print (frame_number, X*height, Y*width)
 
             center_coordinates = (int(X*height), int(Y*width))  # Change these coordinates as needed
             radius = 10
@@ -351,7 +407,8 @@ class Fixation_Detector():
         
         def create_graph_segment(self, frame_number, timestamp, frame_height, frame_width, num_frames, fps, time_frame=1.0):
             
-            time = self.gaze_time
+            time = self.gaze_time-self.gaze_time[0]
+            timestamp = time[frame_number]
             frames = np.linspace(0, num_frames, len(time))
             velocity = self.gaze_velocity
             acceleration = self.gaze_acceleration
@@ -364,44 +421,48 @@ class Fixation_Detector():
 
             timesync = fps*time_frame
 
-            fig, ax = plt.subplots(3)
+            fig, ax = plt.subplots(1)
 
-            print (time.shape, self.gaze_velocity.shape, len(self.fixation_bool))
-            ax[2].plot(time, self.gaze_velocity, 'r')
+            #print (time.shape, self.gaze_velocity.shape, len(self.fixation_bool))
+            print ("Time = ", timestamp, time_frame)
+            ax.plot(time, self.gaze_velocity, 'r')
             #ax[2].plot(time, self.gaze_acceleration, 'b')
-            ax[2].plot(time, self.fixation_bool, 'g')
+            ax.plot(time, self.fixation_bool, 'g')
+            
             
             if not math.isnan(timestamp):
-                ax[2].vlines(timestamp, 0, 1000, color='gray', alpha=0.5, linewidth=20)
-                ax[2].vlines(timestamp, 0, 1000, color='k', linewidth=2)
-                ax[2].set_xlim(timestamp-time_frame,timestamp+time_frame)
+                ax.vlines(timestamp, 0, 1000, color='gray', alpha=0.5, linewidth=20)
+                ax.vlines(timestamp, 0, 1000, color='k', linewidth=2)
+                ax.set_xlim(timestamp-time_frame,timestamp+time_frame)
             else:
                 print ("NaN time")
-            ax[2].set_ylim(0,200)
-            ax[2].set_ylabel("Pupil Angular Velocity")
+            ax.set_ylim(0,200)
+            ax.set_ylabel("Pupil Angular Velocity")
 
-            ax[0].plot(self.pupil_frames, self.pupil_x_pos_norm)
-            ax[0].plot(self.pupil_frames, self.pupil_y_pos_norm)
-            ax[0].vlines(frame_number, 0, 1000, color='gray', alpha=0.5, linewidth=20)
-            ax[0].vlines(frame_number, 0, 1000, color='k', linewidth=2)
-            ax[0].set_xlim(frame_number-timesync, frame_number+timesync)
-            ax[0].set_ylim(0.3,0.65)
-            ax[0].set_ylabel("Pupil Norm. Position Eye Cam.")
+            if self.eye_track_source=="Core":
+                print ("")
+                #ax[0].plot(self.pupil_frames, self.pupil_x_pos_norm)
+                #ax[0].plot(self.pupil_frames, self.pupil_y_pos_norm)
+                #ax[0].vlines(frame_number, 0, 1000, color='gray', alpha=0.5, linewidth=20)
+                #ax[0].vlines(frame_number, 0, 1000, color='k', linewidth=2)
+                #ax[0].set_xlim(frame_number-timesync, frame_number+timesync)
+                #ax[0].set_ylim(0.3,0.65)
+                #ax[0].set_ylabel("Pupil Norm. Position Eye Cam.")
 
-            ## Update this to visualize phi and theta instead -- Just to double check what it is doing. Also change the ylim on this (thesevalues) to investigate them further.
-            
-            #ax[1].plot(self.pupil_positions_data_world_Frame["theta"]-np.mean(self.pupil_positions_data_world_Frame["theta"]), "r")
-            #ax[1].plot(self.pupil_positions_data_world_Frame["circle_3d_normal_y"]-np.mean(self.pupil_positions_data_world_Frame["circle_3d_normal_y"]), "g")
-            ax[1].plot(self.pupil_positions_data_normX_avg-np.mean(self.pupil_positions_data_normX_avg), "r")
-            ax[1].plot(self.pupil_positions_data_normY_avg-np.mean(self.pupil_positions_data_normY_avg), "r")
-            ax[1].plot(self.pupil_positions_data_normZ_avg-np.mean(self.pupil_positions_data_normZ_avg), "r")
-            
-            #ax[1].plot(self.pupil_positions_data_world_Frame["ellipse_angle"], "b")
-            ax[1].vlines(frame_number, -1000, 1000, color='gray', alpha=0.5, linewidth=20)
-            ax[1].vlines(frame_number, -1000, 1000, color='k', linewidth=2)
-            ax[1].set_xlim(frame_number-timesync, frame_number+timesync)
-            ax[1].set_ylim(-0.08,0.08)
-            ax[1].set_ylabel("Eye Vector Norm. Position")
+                ## Update this to visualize phi and theta instead -- Just to double check what it is doing. Also change the ylim on this (thesevalues) to investigate them further.
+                
+                #ax[1].plot(self.pupil_positions_data_world_Frame["theta"]-np.mean(self.pupil_positions_data_world_Frame["theta"]), "r")
+                #ax[1].plot(self.pupil_positions_data_world_Frame["circle_3d_normal_y"]-np.mean(self.pupil_positions_data_world_Frame["circle_3d_normal_y"]), "g")
+                #ax[1].plot(self.pupil_positions_data_normX_avg-np.mean(self.pupil_positions_data_normX_avg), "r")
+                #ax[1].plot(self.pupil_positions_data_normY_avg-np.mean(self.pupil_positions_data_normY_avg), "r")
+                #ax[1].plot(self.pupil_positions_data_normZ_avg-np.mean(self.pupil_positions_data_normZ_avg), "r")
+                
+                #ax[1].plot(self.pupil_positions_data_world_Frame["ellipse_angle"], "b")
+                #ax[1].vlines(frame_number, -1000, 1000, color='gray', alpha=0.5, linewidth=20)
+                #ax[1].vlines(frame_number, -1000, 1000, color='k', linewidth=2)
+                #ax[1].set_xlim(frame_number-timesync, frame_number+timesync)
+                #ax[1].set_ylim(-0.08,0.08)
+                #ax[1].set_ylabel("Eye Vector Norm. Position")
 
             #plt.legend(["Velocity", "Acceleration", "Fixation (Yes/No)"])
             #plt.xlim([624000,624010])
@@ -526,8 +587,10 @@ class Fixation_Detector():
             else:
                 gaze_position = (frame_number, gaze_x, gaze_y)
             
-
-            blank_canvas = create_graph_segment(self, frame_number, self.world_timestamps["# timestamps [seconds]"][frame_number], frame_height,frame_width, total_frames, fps)
+            if self.eye_track_source=="Core":
+                blank_canvas = create_graph_segment(self, frame_number, self.world_timestamps["# timestamps [seconds]"][frame_number], frame_height,frame_width, total_frames, fps)
+            elif self.eye_track_source=="Neon":
+                blank_canvas = create_graph_segment(self, frame_number, self.world_timestamps["timestamp [ns]"][frame_number], frame_height,frame_width, total_frames, fps)
 
             cv2.putText(frame, str(np.round(frame_number)), (5, 30), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (0, 0, 255), 1)
 
@@ -564,7 +627,81 @@ class Fixation_Detector():
         print ("Done fixation tracking in video.")
         return self
 
-    def estimate_optic_flow(self, gaze_centered=False,only_show_fixations=True, start_frame=0, visualize_as="color", 
+
+subject_folder = "D:/Subject1"#"//cps-data.cps.utexas.edu/HayhoeLab/children/10139/pandp00/neon_cloudexports/" # Add subject folder name here
+gaze_folder = "000" # Within subject folder should be a gaze data folder --- something like 000 or 001
+                # It will then search that for an export folder, and take export 000 from it and read in all the data
+                # Find fixations will find all of the fixations and save the data to the subject folder.
+                # Create fixation tracking video will create a video that shows fixations and plots the graph of the gaze velocities/accelerations next to it. 
+                # LEAVE EMPTY STRING IF NEON DATA!
+eye_tracker = "Core"
+
+detector = Fixation_Detector(subject_folder_path=subject_folder, gaze_folder_name=gaze_folder, source=eye_tracker)
+
+detector.read_gaze_data(export_number="001")  #If Neon the export number is ignored
+
+maxVelocity = 45  # Just change this and the next value to adjust how fixations are detected. They are angular velocity and acceleration of the eye. 
+maxAcceleration = 20 # Not used
+
+detector.find_fixation_updated(eye_id=0,maxVel=maxVelocity, minVel=10, maxAcc=maxAcceleration, method="3d c++")
+
+detector.create_fixation_tracking_video_updated(track_fixations=False, tracking_window=45)
+
+# This is an optic flow estimation function, BUT it can also be used to output the retina centered video. It currently does the entire video, not breaking it up into fixations. Though this can be done easily. 
+#detector.estimate_optic_flow(gaze_centered=True, only_show_fixations=True, use_tracked_fixations=True,
+#                              output_flow=True, output_centered_video=True, visualize_as="vectors",
+#                                overwrite_flow_folder=True, remove_padding=True, padding_window_removed=250, use_CUDA=False, output_type="MAT")
+
+# Add functionality so that this outputs the head centered flow too (and doesn't overwrite the retina centered flow data)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+'''def estimate_optic_flow(self, gaze_centered=False,only_show_fixations=True, start_frame=0, visualize_as="color", 
                             use_tracked_fixations=False, output_flow=False, output_centered_video=False, overwrite_flow_folder=False, 
                             resize_frame_scale="",remove_padding=False, padding_window_removed=200, use_CUDA=True, output_type="NPY"):
         self.use_tracked_fixations = use_tracked_fixations
@@ -631,10 +768,7 @@ class Fixation_Detector():
             return magnitude
 
         def visualize_flow_as_hsv(self, magnitude, angle):
-            '''
-            Note that to perform well, this function really needs an upper_bound, which also acts as a normalizing term.
-            
-            '''
+
 
             # create hsv output for optical flow
             hsv = np.zeros([np.shape(magnitude)[0], np.shape(magnitude)[1], 3], np.uint8)
@@ -722,8 +856,7 @@ class Fixation_Detector():
         
         
         def create_gaze_centered_frame(self, frame, frame_index, padding_size, remove_padding=False, padding_window_removed=200):
-            '''Probably need to figure out how to do fixation detection and point tracking on the image over the duration of the fixation.'''
-            height = np.shape(frame)[0]
+
             width = np.shape(frame)[1]
             
             #if os.path.isfile(self.subject_folder_path + "/trackedGazePositions.npy"):
@@ -827,7 +960,7 @@ class Fixation_Detector():
 
 
         if output_flow:
-            '''This function will only work is opencv was installed with CUDA/GPU support is install on the PC. I will add functionality so that it uses a more general optic flow algorithm.'''
+            
            
             if use_CUDA:
                 # Create optical flow object
@@ -1099,29 +1232,4 @@ class Fixation_Detector():
         cv2.destroyAllWindows()  
         
 
-        return self
-
-subject_folder = "Subject4" # Add subject folder name here
-gaze_folder = "000" # Within subject folder should be a gaze data folder --- something like 000 or 001
-                # It will then search that for an export folder, and take export 000 from it and read in all the data
-                # Find fixations will find all of the fixations and save the data to the subject folder.
-                # Create fixation tracking video will create a video that shows fixations and plots the graph of the gaze velocities/accelerations next to it. 
-
-detector = Fixation_Detector(subject_folder_path=subject_folder, gaze_folder_name=gaze_folder)
-
-detector.read_gaze_data(export_number="000")
-
-maxVelocity = 45  # Just change this and the next value to adjust how fixations are detected. They are angular velocity and acceleration of the eye. 
-maxAcceleration = 20 # Not used
-
-detector.find_fixation_updated(eye_id=0,maxVel=maxVelocity, minVel=10, maxAcc=maxAcceleration, method="3d c++")
-
-detector.create_fixation_tracking_video_updated(track_fixations=False, tracking_window=45)
-
-# This is an optic flow estimation function, BUT it can also be used to output the retina centered video. It currently does the entire video, not breaking it up into fixations. Though this can be done easily. 
-#detector.estimate_optic_flow(gaze_centered=True, only_show_fixations=True, use_tracked_fixations=True,
-#                              output_flow=True, output_centered_video=True, visualize_as="vectors",
-#                                overwrite_flow_folder=True, remove_padding=True, padding_window_removed=250, use_CUDA=False, output_type="MAT")
-
-# Add functionality so that this outputs the head centered flow too (and doesn't overwrite the retina centered flow data)
-
+        return self'''
